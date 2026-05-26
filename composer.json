@@ -1,0 +1,37 @@
+{
+    "name": "snipform/sdk",
+    "description": "Official PHP SDK for the Snipform API",
+    "type": "library",
+    "license": "MIT",
+    "keywords": ["snipform", "sdk", "analytics", "signals", "tracking"],
+    "homepage": "https://snipform.io",
+    "authors": [
+        {
+            "name": "David Philip",
+            "email": "pd.philip@gmail.com"
+        }
+    ],
+    "require": {
+        "php": "^8.2",
+        "guzzlehttp/guzzle": "^7.0"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^11.0",
+        "laravel/pint": "^1.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Snipform\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Snipform\\Tests\\": "tests/"
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true,
+    "config": {
+        "sort-packages": true
+    }
+}
