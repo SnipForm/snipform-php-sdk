@@ -177,6 +177,103 @@ Filters:
 | `botsOnly()` | only bot clicks |
 | `perPage($n)` | page size, 1–100 |
 
+## Session actions
+
+Three writes scoped to a single SignalSession: resolve a visitor's session id from their request, submit a custom event, and patch acquisition metadata.
+
+### Resolve
+
+Looks up the SignalSession that belongs to a visitor — by hashing their IP + User-Agent + language with the same daily salt the JS tracker uses. The visitor must already have been tracked once today on this property for the lookup to find a match.
+
+The SDK accepts a Symfony or Laravel Request and pulls those values for you. Pass `$request` from your controller:
+
+```php
+// Laravel
+public function handleVisitor(Request $request)
+{
+    $resolved = $snipform->session()->resolve($request);
+    // → ResolveResult { resolved: true, sessionId: 'abc...', sid: 'hash...' }
+}
+```
+
+```php
+// Symfony
+public function handle(Request $request): Response
+{
+    $resolved = $snipform->session()->resolve($request);
+}
+```
+
+Or pass values explicitly if you're not on a Symfony-flavoured framework:
+
+```php
+$resolved = $snipform->session()->resolve([
+    'ip'         => $myFramework->getClientIp(),
+    'user_agent' => $myFramework->getUserAgent(),
+    'lang'       => $myFramework->getAcceptLanguage(),
+]);
+```
+
+`$resolved->resolved` is `false` if the visitor hasn't been tracked yet today on this property. Handle that case before chaining further writes.
+
+> **Important:** the `ip` must be the **visitor's** IP from your incoming request, not your server's outbound IP. Your framework's `$request->getClientIp()` / equivalent does the right thing automatically (resolves through proxies / CDNs). The SDK does not inspect the transport-level IP of its own outbound call.
+
+### Event
+
+Submit a custom event for a session. Requires `session_id` (from a prior `resolve()`).
+
+```php
+$event = $snipform->session()->event([
+    'session_id' => $resolved->sessionId,
+    'name'       => 'purchase',
+    'value'      => 99.99,            // optional
+    'meta'       => ['order_id' => 'X-1', 'currency' => 'USD'],  // optional
+]);
+```
+
+Returns a typed `Event` value object.
+
+### Acquisition
+
+Patch acquisition metadata onto a session. Partial — only supplied keys are written. Tags merge with existing tags (deduped); cost / value / currency overwrite.
+
+```php
+$snipform->session()->acquisition([
+    'session_id'    => $resolved->sessionId,
+    'cost'          => 250,          // optional, integer
+    'value'         => 9900,         // optional, integer
+    'currency_code' => 'USD',        // optional, ISO 4217
+    'tags'          => ['affiliate'],// optional, merged
+]);
+```
+
+Returns the resulting `acquisition_meta` array along with the session id.
+
+### Typical end-to-end flow
+
+```php
+public function recordConversion(Request $request)
+{
+    $resolved = $snipform->session()->resolve($request);
+    if (! $resolved->resolved) {
+        return;  // visitor hasn't been tracked yet
+    }
+
+    $snipform->session()->event([
+        'session_id' => $resolved->sessionId,
+        'name'       => 'purchase',
+        'value'      => $order->total,
+    ]);
+
+    $snipform->session()->acquisition([
+        'session_id'    => $resolved->sessionId,
+        'value'         => (int) ($order->total * 100),
+        'currency_code' => $order->currency,
+        'tags'          => ['paid'],
+    ]);
+}
+```
+
 ## Authentication
 
 The SDK takes a property-scoped Personal Access Token. Generate one in **Property → Settings → API Tokens**. Tokens carry scope (e.g. `signals:read`) — the SDK forwards them and the API enforces.

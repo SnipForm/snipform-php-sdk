@@ -2,78 +2,171 @@
 
 namespace Snipform\Resources;
 
+use InvalidArgumentException;
+use Snipform\Exceptions\MissingSessionIdException;
+use Snipform\Http\HttpClient;
+use Symfony\Component\HttpFoundation\Request;
+
 /**
- * Typed value object for a single SignalSession row, as the V2 API ships it.
+ * Session-scoped actions: resolve a visitor's session by fingerprint, submit
+ * a custom event, patch acquisition metadata.
  *
- * Only the columns most consumers want are typed; the full raw row is kept
- * accessible via ->raw() for fields we haven't surfaced.
+ * Two ways to identify which session to act on:
+ *
+ *   A) Explicit `session_id` in the payload (always works):
+ *      $client->session()->event(['session_id' => $id, 'name' => 'purchase']);
+ *
+ *   B) Pass the incoming Request — the SDK pulls session_id from the
+ *      X-Snipform-Session-Id header or the snip_session_id form field that
+ *      signals.js sets via attachToFetch() / attachToForms():
+ *      $client->session()->event($request, ['name' => 'purchase']);
  */
 class Session
 {
-    public function __construct(
-        public readonly string $id,
-        public readonly int $entryTs,
-        public readonly ?int $lastTs,
-        public readonly ?string $country,
-        public readonly ?string $countryCode,
-        public readonly ?string $city,
-        public readonly ?string $device,
-        public readonly ?string $os,
-        public readonly ?string $browser,
-        public readonly ?string $entryPath,
-        public readonly ?string $exitPath,
-        public readonly ?string $referrerDomain,
-        public readonly ?string $source,
-        public readonly ?string $channel,
-        public readonly ?string $utmSource,
-        public readonly ?string $utmMedium,
-        public readonly ?string $utmCampaign,
-        public readonly ?string $utmContent,
-        public readonly ?string $utmTerm,
-        public readonly int $views,
-        public readonly int $timeOnSite,
-        public readonly bool $bounced,
-        public readonly array $tags,
-        private readonly array $raw,
-    ) {}
+    private const SESSION_HEADER = 'X-Snipform-Session-Id';
 
-    /** Access the full raw row for any column not surfaced on the typed object. */
-    public function raw(?string $key = null): mixed
+    private const SESSION_FORM_FIELD = 'snip_session_id';
+
+    public function __construct(private readonly HttpClient $http) {}
+
+    // ======================================================================
+    // Resolve — derive session_id from a visitor's fingerprint
+    // ======================================================================
+
+    /**
+     * Look up the visitor's SignalSession by their fingerprint. Accepts a
+     * Symfony/Laravel Request (ip / UA / lang extracted automatically) or
+     * a plain array with those keys.
+     *
+     * @param  Request|array{ip: string, user_agent: string, lang?: string}  $input
+     */
+    public function resolve(Request|array $input): ResolveResult
     {
-        if ($key === null) {
-            return $this->raw;
-        }
+        $payload = $input instanceof Request
+            ? $this->extractFromRequest($input)
+            : $this->validateArrayInput($input);
 
-        return $this->raw[$key] ?? null;
+        $data = $this->http->post('property/session/resolve', $payload)->data();
+
+        return ResolveResult::fromArray((array) $data);
     }
 
-    public static function fromArray(array $row): self
+    // ======================================================================
+    // Event — submit a custom event
+    // ======================================================================
+
+    /**
+     * Submit a custom event for a session. Pass either:
+     *   - a Request (SDK extracts session_id from X-Snipform-Session-Id or snip_session_id), or
+     *   - just the attributes array with an explicit session_id key.
+     *
+     * @param  Request|array  $requestOrAttributes  Symfony/Laravel Request, or attributes array if calling shorthand
+     * @param  array{name: string, value?: mixed, meta?: array}|null  $attributes  required when first arg is a Request
+     */
+    public function event(Request|array $requestOrAttributes, ?array $attributes = null): Event
     {
-        return new self(
-            id: (string) ($row['id'] ?? ''),
-            entryTs: (int) ($row['entry_ts'] ?? 0),
-            lastTs: isset($row['last_ts']) ? (int) $row['last_ts'] : null,
-            country: $row['country_name'] ?? null,
-            countryCode: $row['request_country'] ?? null,
-            city: $row['city_name'] ?? null,
-            device: $row['request_device'] ?? null,
-            os: $row['request_platform'] ?? null,
-            browser: $row['request_browser_name'] ?? null,
-            entryPath: $row['entry_path'] ?? null,
-            exitPath: $row['exit_path'] ?? null,
-            referrerDomain: $row['referrer_domain'] ?? null,
-            source: $row['source_name'] ?? null,
-            channel: $row['channel_category'] ?? null,
-            utmSource: $row['utm_source'] ?? null,
-            utmMedium: $row['utm_medium'] ?? null,
-            utmCampaign: $row['utm_campaign'] ?? null,
-            utmContent: $row['utm_content'] ?? null,
-            utmTerm: $row['utm_term'] ?? null,
-            views: (int) ($row['views'] ?? 0),
-            timeOnSite: (int) ($row['time_on_site'] ?? 0),
-            bounced: (bool) ($row['bounced'] ?? false),
-            tags: $row['tags'] ?? [],
-            raw: $row,
-        );
+        $payload = $this->payloadWithSession($requestOrAttributes, $attributes);
+        $row = $this->http->post('property/session/event', $payload)->data('event');
+
+        return Event::fromArray((array) $row);
+    }
+
+    // ======================================================================
+    // Acquisition — patch acquisition meta onto a session
+    // ======================================================================
+
+    /**
+     * Patch acquisition metadata. Same signature shape as event() — pass a
+     * Request to auto-attach session_id, or pass attributes with an explicit
+     * session_id.
+     *
+     * @param  array{cost?: int, value?: int, currency_code?: string, tags?: array<string>}|null  $attributes
+     * @return array{id: string, acquisition_meta: array}
+     */
+    public function acquisition(Request|array $requestOrAttributes, ?array $attributes = null): array
+    {
+        $payload = $this->payloadWithSession($requestOrAttributes, $attributes);
+
+        return (array) $this->http
+            ->post('property/session/acquisition', $payload)
+            ->data('session');
+    }
+
+    // ======================================================================
+    // Public helper — pull session_id from a Request (or return null)
+    // ======================================================================
+
+    /**
+     * Extract a Snipform session_id from a Symfony/Laravel Request:
+     *   1. X-Snipform-Session-Id header (attached by signals.js attachToFetch)
+     *   2. snip_session_id body/form field (attached by attachToForms)
+     *
+     * Returns null if neither is present. Use this when you want to decide
+     * yourself how to handle the no-session case, instead of letting
+     * event()/acquisition() throw.
+     */
+    public function fromRequest(Request $request): ?string
+    {
+        $headerValue = $request->headers->get(self::SESSION_HEADER);
+        if ($headerValue) {
+            return $headerValue;
+        }
+
+        $formValue = $request->request->get(self::SESSION_FORM_FIELD)
+            ?? $request->query->get(self::SESSION_FORM_FIELD);
+
+        return $formValue ?: null;
+    }
+
+    // ======================================================================
+    // Internals
+    // ======================================================================
+
+    private function payloadWithSession(Request|array $requestOrAttributes, ?array $attributes): array
+    {
+        if ($requestOrAttributes instanceof Request) {
+            if ($attributes === null) {
+                throw new InvalidArgumentException('When passing a Request, the attributes array is required as the second argument.');
+            }
+            $sessionId = $this->fromRequest($requestOrAttributes);
+            if (! $sessionId) {
+                throw new MissingSessionIdException;
+            }
+
+            return ['session_id' => $sessionId, ...$attributes];
+        }
+
+        // Array shorthand — expects session_id key inside.
+        if (empty($requestOrAttributes['session_id'])) {
+            throw new MissingSessionIdException(
+                'session_id is required — either include it in the attributes array or pass a Request as the first argument.',
+            );
+        }
+
+        return $requestOrAttributes;
+    }
+
+    private function extractFromRequest(Request $request): array
+    {
+        return [
+            'ip' => $request->getClientIp() ?? '',
+            'user_agent' => (string) ($request->headers->get('User-Agent') ?? ''),
+            'lang' => (string) ($request->headers->get('Accept-Language') ?? ''),
+        ];
+    }
+
+    private function validateArrayInput(array $input): array
+    {
+        if (empty($input['ip']) || empty($input['user_agent'])) {
+            throw new InvalidArgumentException(
+                'resolve() requires `ip` and `user_agent` — pass a Symfony/Laravel Request or an array with those keys',
+            );
+        }
+
+        return [
+            'ip' => (string) $input['ip'],
+            'user_agent' => (string) $input['user_agent'],
+            'lang' => (string) ($input['lang'] ?? ''),
+        ];
     }
 }

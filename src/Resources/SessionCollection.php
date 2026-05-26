@@ -19,7 +19,7 @@ class SessionCollection
             itemsPath: 'sessions.data',
             totalPath: 'sessions.total',
             lastPagePath: 'sessions.last_page',
-            factory: Session::fromArray(...),
+            factory: SessionRow::fromArray(...),
             verb: 'POST',
         );
     }

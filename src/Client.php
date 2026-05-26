@@ -6,6 +6,7 @@ use Snipform\Http\HttpClient;
 use Snipform\Resources\Clicks;
 use Snipform\Resources\LinkGroups;
 use Snipform\Resources\Links;
+use Snipform\Resources\Session;
 use Snipform\Resources\Signals;
 
 /**
@@ -29,6 +30,11 @@ class Client
     public function signals(): Signals
     {
         return new Signals($this->http);
+    }
+
+    public function session(): Session
+    {
+        return new Session($this->http);
     }
 
     public function linkGroups(): LinkGroups
