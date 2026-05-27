@@ -5,7 +5,7 @@ namespace SnipForm\Resources;
 /**
  * Typed value object for a short-link group.
  */
-class LinkGroup
+class LinkGroup extends SnipFormDTO
 {
     public function __construct(
         public readonly string $id,
@@ -17,16 +17,9 @@ class LinkGroup
         public readonly int $countLinks,
         public readonly int $countClicks,
         public readonly ?string $createdAt,
-        private readonly array $raw,
-    ) {}
-
-    public function raw(?string $key = null): mixed
-    {
-        if ($key === null) {
-            return $this->raw;
-        }
-
-        return $this->raw[$key] ?? null;
+        array $raw = [],
+    ) {
+        parent::__construct($raw);
     }
 
     public static function fromArray(array $row): self

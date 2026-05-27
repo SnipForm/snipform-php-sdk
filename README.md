@@ -32,6 +32,17 @@ $metrics = $snipform->signals()
 echo "Sessions: {$metrics->sessions}, bounce: {$metrics->bounceRate}%";
 ```
 
+## DTOs
+
+Every typed return object extends `SnipForm\Resources\SnipFormDTO` and exposes two helpers:
+
+```php
+$dto->toArray();                  // public fields as an array, raw excluded
+$dto->raw();                      // original API payload
+$dto->raw('field');               // single field from the payload, or null
+$dto->raw('acquisition.value');   // dot-path into nested arrays, or null
+```
+
 ## Property
 
 The token is scoped to a single SnipForm Property. Pull its identity + headline counts:

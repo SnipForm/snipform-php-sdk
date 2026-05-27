@@ -8,7 +8,7 @@ namespace SnipForm\Resources;
  *
  * `steps` is empty on list shapes and populated on the detail shape.
  */
-class Conversion
+class Conversion extends SnipFormDTO
 {
     /**
      * @param  array<int, ConversionStep>  $steps
@@ -26,8 +26,10 @@ class Conversion
         public readonly ?string $defaultPeriod,
         public readonly ?string $defaultCycle,
         public readonly array $steps,
-        private readonly array $raw,
-    ) {}
+        array $raw = [],
+    ) {
+        parent::__construct($raw);
+    }
 
     public function isDraft(): bool
     {
@@ -37,11 +39,6 @@ class Conversion
     public function isActive(): bool
     {
         return $this->state === 'active';
-    }
-
-    public function raw(?string $key = null): mixed
-    {
-        return $key === null ? $this->raw : ($this->raw[$key] ?? null);
     }
 
     public static function fromArray(array $row): self

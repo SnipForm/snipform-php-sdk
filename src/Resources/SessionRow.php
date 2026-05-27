@@ -8,7 +8,7 @@ namespace SnipForm\Resources;
  * Only the columns most consumers want are typed; the full raw row is kept
  * accessible via ->raw() for fields we haven't surfaced.
  */
-class SessionRow
+class SessionRow extends SnipFormDTO
 {
     public function __construct(
         public readonly string $id,
@@ -34,17 +34,9 @@ class SessionRow
         public readonly int $timeOnSite,
         public readonly bool $bounced,
         public readonly array $tags,
-        private readonly array $raw,
-    ) {}
-
-    /** Access the full raw row for any column not surfaced on the typed object. */
-    public function raw(?string $key = null): mixed
-    {
-        if ($key === null) {
-            return $this->raw;
-        }
-
-        return $this->raw[$key] ?? null;
+        array $raw = [],
+    ) {
+        parent::__construct($raw);
     }
 
     public static function fromArray(array $row): self

@@ -4,7 +4,8 @@
 
 ### Added
 
-- **`Client::properties()`** resource backing the `GET /property/overview` endpoint, with a typed **`PropertyOverview`** value object (`id`, `name`, `domain`, `hasSignals`, `state`, `stateName`, `counts`, `raw()`).
+- **`SnipFormDTO`** abstract base class for every typed return object. Provides `raw()` (full payload or `raw('key')` for a single field) and `toArray()` (public fields, raw excluded). Every DTO in `Resources/` now extends it.
+- **`Client::properties()`** resource backing the `GET /property/overview` endpoint, with a typed **`PropertyOverview`** value object (`id`, `name`, `domain`, `hasSignals`, `state`, `stateName`, `counts`).
 - **`path_prefix`** client option (default `/v2/`) so the URL path between `base_url` and the resource can be overridden per deployment.
 - **`verify_ssl`** client option (default `true`) — set `false` for local self-signed certificates.
 

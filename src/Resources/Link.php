@@ -5,7 +5,7 @@ namespace SnipForm\Resources;
 /**
  * Typed value object for a short link.
  */
-class Link
+class Link extends SnipFormDTO
 {
     public function __construct(
         public readonly string $id,
@@ -18,21 +18,14 @@ class Link
         public readonly bool $isActive,
         public readonly int $clicks,
         public readonly ?int $createdTs,
-        private readonly array $raw,
-    ) {}
+        array $raw = [],
+    ) {
+        parent::__construct($raw);
+    }
 
     public function utm(string $key): ?string
     {
         return $this->utm[$key] ?? null;
-    }
-
-    public function raw(?string $key = null): mixed
-    {
-        if ($key === null) {
-            return $this->raw;
-        }
-
-        return $this->raw[$key] ?? null;
     }
 
     public static function fromArray(array $row): self

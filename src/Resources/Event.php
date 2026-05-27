@@ -5,7 +5,7 @@ namespace SnipForm\Resources;
 /**
  * Typed value object for a custom event submitted via $client->session()->event().
  */
-class Event
+class Event extends SnipFormDTO
 {
     public function __construct(
         public readonly string $id,
@@ -15,16 +15,9 @@ class Event
         public readonly ?string $value,
         public readonly array $meta,
         public readonly ?int $createdTs,
-        private readonly array $raw,
-    ) {}
-
-    public function raw(?string $key = null): mixed
-    {
-        if ($key === null) {
-            return $this->raw;
-        }
-
-        return $this->raw[$key] ?? null;
+        array $raw = [],
+    ) {
+        parent::__construct($raw);
     }
 
     public static function fromArray(array $row): self

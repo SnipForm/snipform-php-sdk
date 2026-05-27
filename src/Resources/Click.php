@@ -5,7 +5,7 @@ namespace SnipForm\Resources;
 /**
  * Typed value object for a single short-link click event.
  */
-class Click
+class Click extends SnipFormDTO
 {
     public function __construct(
         public readonly string $id,
@@ -24,16 +24,9 @@ class Click
         public readonly ?string $os,
         public readonly bool $isBot,
         public readonly ?string $botName,
-        private readonly array $raw,
-    ) {}
-
-    public function raw(?string $key = null): mixed
-    {
-        if ($key === null) {
-            return $this->raw;
-        }
-
-        return $this->raw[$key] ?? null;
+        array $raw = [],
+    ) {
+        parent::__construct($raw);
     }
 
     public static function fromArray(array $row): self

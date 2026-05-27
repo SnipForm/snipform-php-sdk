@@ -9,7 +9,7 @@ namespace SnipForm\Resources;
  * the window. `value` is null when no monetary value is associated with the
  * conversion definition.
  */
-class ConversionSummary
+class ConversionSummary extends SnipFormDTO
 {
     /**
      * @param  array<int, FunnelStep>  $funnel
@@ -22,12 +22,9 @@ class ConversionSummary
         public readonly int $windowFrom,
         public readonly int $windowTo,
         public readonly array $funnel,
-        private readonly array $raw,
-    ) {}
-
-    public function raw(?string $key = null): mixed
-    {
-        return $key === null ? $this->raw : ($this->raw[$key] ?? null);
+        array $raw = [],
+    ) {
+        parent::__construct($raw);
     }
 
     public static function fromArray(array $row): self

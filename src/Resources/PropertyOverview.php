@@ -12,7 +12,7 @@ namespace SnipForm\Resources;
  *   $property->counts;        // ['sessions' => int, 'forms' => int, 'pages' => int, ...]
  *   $property->raw();         // full unwrapped data block
  */
-class PropertyOverview
+class PropertyOverview extends SnipFormDTO
 {
     public function __construct(
         public readonly string $id,
@@ -22,12 +22,9 @@ class PropertyOverview
         public readonly ?string $state,
         public readonly ?string $stateName,
         public readonly array $counts,
-        private readonly array $raw,
-    ) {}
-
-    public function raw(): array
-    {
-        return $this->raw;
+        array $raw = [],
+    ) {
+        parent::__construct($raw);
     }
 
     public static function fromArray(array $data): self

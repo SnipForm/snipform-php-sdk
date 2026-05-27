@@ -15,7 +15,7 @@ use SnipForm\Http\Response;
  *   $metrics->bounceRate;  // float (0-100)
  *   $metrics->raw();       // full body
  */
-class MetricsResult
+class MetricsResult extends SnipFormDTO
 {
     public function __construct(
         public readonly int $sessions,
@@ -26,12 +26,9 @@ class MetricsResult
         public readonly float $avgScroll,
         public readonly ?string $showing,
         public readonly float $tookMs,
-        private readonly array $raw,
-    ) {}
-
-    public function raw(): array
-    {
-        return $this->raw;
+        array $raw = [],
+    ) {
+        parent::__construct($raw);
     }
 
     public static function fromResponse(Response $response): self
