@@ -1,10 +1,10 @@
 <?php
 
-namespace Snipform\Resources;
+namespace SnipForm\Resources;
 
 /**
  * Result of $client->session()->resolve($request) — the answer to
- * "which Snipform session belongs to this visitor?".
+ * "which SnipForm session belongs to this visitor?".
  *
  * If $resolved is false, this visitor hasn't been tracked yet today on
  * this property and $sessionId will be null. The $sid is returned either

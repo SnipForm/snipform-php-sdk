@@ -1,6 +1,6 @@
 <?php
 
-namespace Snipform\Resources\Builders;
+namespace SnipForm\Resources\Builders;
 
 /**
  * Builder for one funnel step. Each `on*()` method picks the trigger and

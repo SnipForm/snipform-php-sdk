@@ -1,8 +1,8 @@
 <?php
 
-namespace Snipform\Resources;
+namespace SnipForm\Resources;
 
-use Snipform\Http\Response;
+use SnipForm\Http\Response;
 
 /**
  * Typed value object for the analytics-metrics endpoint payload.

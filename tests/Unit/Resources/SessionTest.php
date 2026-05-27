@@ -1,13 +1,13 @@
 <?php
 
-namespace Snipform\Tests\Unit\Resources;
+namespace SnipForm\Tests\Unit\Resources;
 
 use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
-use Snipform\Exceptions\MissingSessionIdException;
-use Snipform\Http\HttpClient;
-use Snipform\Resources\Session;
+use SnipForm\Exceptions\MissingSessionIdException;
+use SnipForm\Http\HttpClient;
+use SnipForm\Resources\Session;
 use Symfony\Component\HttpFoundation\Request;
 
 /**
@@ -115,7 +115,7 @@ class SessionTest extends TestCase
         $request = Request::create('/path', 'POST', parameters: [
             'snip_session_id' => 'from-form',
         ]);
-        $request->headers->set('X-Snipform-Session-Id', 'from-header');
+        $request->headers->set('X-SnipForm-Session-Id', 'from-header');
 
         $this->assertSame('from-header', $this->session()->fromRequest($request));
     }
@@ -149,7 +149,7 @@ class SessionTest extends TestCase
     public function test_payload_with_session_uses_header_session_id(): void
     {
         $request = Request::create('/path', 'POST');
-        $request->headers->set('X-Snipform-Session-Id', 'abc');
+        $request->headers->set('X-SnipForm-Session-Id', 'abc');
 
         $payload = $this->call($this->session(), 'payloadWithSession', $request, ['name' => 'purchase']);
 
@@ -186,7 +186,7 @@ class SessionTest extends TestCase
         $this->expectException(InvalidArgumentException::class);
 
         $request = Request::create('/path', 'POST');
-        $request->headers->set('X-Snipform-Session-Id', 'abc');
+        $request->headers->set('X-SnipForm-Session-Id', 'abc');
 
         $this->call($this->session(), 'payloadWithSession', $request, null);
     }

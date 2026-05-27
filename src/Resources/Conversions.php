@@ -1,10 +1,10 @@
 <?php
 
-namespace Snipform\Resources;
+namespace SnipForm\Resources;
 
-use Snipform\Http\HttpClient;
-use Snipform\Resources\Builders\ConversionAnalytics;
-use Snipform\Resources\Builders\ConversionBuilder;
+use SnipForm\Http\HttpClient;
+use SnipForm\Resources\Builders\ConversionAnalytics;
+use SnipForm\Resources\Builders\ConversionBuilder;
 
 /**
  * Conversions resource. Two surfaces:

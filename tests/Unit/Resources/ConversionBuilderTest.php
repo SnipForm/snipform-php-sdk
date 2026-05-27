@@ -1,11 +1,11 @@
 <?php
 
-namespace Snipform\Tests\Unit\Resources;
+namespace SnipForm\Tests\Unit\Resources;
 
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
-use Snipform\Http\HttpClient;
-use Snipform\Resources\Builders\ConversionBuilder;
+use SnipForm\Http\HttpClient;
+use SnipForm\Resources\Builders\ConversionBuilder;
 
 /**
  * The ConversionBuilder is fluent — verify each setter and each step-trigger

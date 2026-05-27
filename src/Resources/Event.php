@@ -1,6 +1,6 @@
 <?php
 
-namespace Snipform\Resources;
+namespace SnipForm\Resources;
 
 /**
  * Typed value object for a custom event submitted via $client->session()->event().

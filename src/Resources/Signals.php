@@ -1,9 +1,9 @@
 <?php
 
-namespace Snipform\Resources;
+namespace SnipForm\Resources;
 
-use Snipform\Http\HttpClient;
-use Snipform\Query\Builder;
+use SnipForm\Http\HttpClient;
+use SnipForm\Query\Builder;
 
 /**
  * Signals resource — entry to the session/analytics endpoints.

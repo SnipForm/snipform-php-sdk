@@ -1,6 +1,6 @@
 <?php
 
-namespace Snipform\Resources;
+namespace SnipForm\Resources;
 
 /**
  * One step of a conversion funnel.

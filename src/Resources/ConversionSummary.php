@@ -1,6 +1,6 @@
 <?php
 
-namespace Snipform\Resources;
+namespace SnipForm\Resources;
 
 /**
  * Result of $client->conversions()->for($id)->summary().

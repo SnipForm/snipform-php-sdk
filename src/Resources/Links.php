@@ -1,8 +1,8 @@
 <?php
 
-namespace Snipform\Resources;
+namespace SnipForm\Resources;
 
-use Snipform\Http\HttpClient;
+use SnipForm\Http\HttpClient;
 
 /**
  * Short-links resource. Paginated list + full CRUD.

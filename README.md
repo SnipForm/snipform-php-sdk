@@ -1,6 +1,6 @@
-# Snipform PHP SDK
+# SnipForm PHP SDK
 
-Official PHP SDK for the [Snipform](https://snipform.io) API. Eloquent-flavoured query builder over the V2 endpoints.
+Official PHP SDK for the [SnipForm](https://snipform.io) API. Eloquent-flavoured query builder over the V2 endpoints.
 
 ```bash
 composer require snipform/php-sdk
@@ -9,9 +9,9 @@ composer require snipform/php-sdk
 ## Quick start
 
 ```php
-use Snipform\Snipform;
+use SnipForm\SnipForm;
 
-$snipform = Snipform::client('snipform_pat_xxx');
+$snipform = SnipForm::client('snipform_pat_xxx');
 
 // List sessions matching a query — auto-paginated
 foreach ($snipform->signals()
@@ -281,9 +281,9 @@ The SDK takes a property-scoped Personal Access Token. Generate one in **Propert
 ## Error handling
 
 ```php
-use Snipform\Exceptions\AuthenticationException;
-use Snipform\Exceptions\ApiException;
-use Snipform\Exceptions\SnipformException;
+use SnipForm\Exceptions\AuthenticationException;
+use SnipForm\Exceptions\ApiException;
+use SnipForm\Exceptions\SnipFormException;
 
 try {
     $sessions = $snipform->signals()->sessions()->all();
@@ -291,7 +291,7 @@ try {
     // 401 / 403 — token bad or out of scope
 } catch (ApiException $e) {
     // 4xx / 5xx with a structured body — see $e->status, $e->errors, $e->body
-} catch (SnipformException $e) {
+} catch (SnipFormException $e) {
     // any other SDK-side failure (transport, JSON decode, etc.)
 }
 ```
@@ -299,7 +299,7 @@ try {
 ## Configuration
 
 ```php
-Snipform::client('snipform_pat_xxx', [
+SnipForm::client('snipform_pat_xxx', [
     'base_url' => 'https://app.snipform.io',  // default
     'timeout'  => 30,                          // seconds
 ]);

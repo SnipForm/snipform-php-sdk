@@ -1,8 +1,8 @@
 <?php
 
-namespace Snipform\Resources;
+namespace SnipForm\Resources;
 
-use Snipform\Http\HttpClient;
+use SnipForm\Http\HttpClient;
 
 /**
  * Link-groups resource. Groups are returned in a single shot from the API

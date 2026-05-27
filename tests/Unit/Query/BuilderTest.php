@@ -1,10 +1,10 @@
 <?php
 
-namespace Snipform\Tests\Unit\Query;
+namespace SnipForm\Tests\Unit\Query;
 
 use PHPUnit\Framework\TestCase;
-use Snipform\Http\HttpClient;
-use Snipform\Query\Builder;
+use SnipForm\Http\HttpClient;
+use SnipForm\Query\Builder;
 
 class BuilderTest extends TestCase
 {

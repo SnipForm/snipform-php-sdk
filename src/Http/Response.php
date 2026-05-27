@@ -1,9 +1,9 @@
 <?php
 
-namespace Snipform\Http;
+namespace SnipForm\Http;
 
 /**
- * Thin wrapper over a decoded API response. The Snipform API ships as:
+ * Thin wrapper over a decoded API response. The SnipForm API ships as:
  *
  *   { code, status, data: { inputs, analytics|sessions|..., meta, options } }
  *

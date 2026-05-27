@@ -1,17 +1,17 @@
 <?php
 
-namespace Snipform;
+namespace SnipForm;
 
-use Snipform\Http\HttpClient;
-use Snipform\Resources\Clicks;
-use Snipform\Resources\Conversions;
-use Snipform\Resources\LinkGroups;
-use Snipform\Resources\Links;
-use Snipform\Resources\Session;
-use Snipform\Resources\Signals;
+use SnipForm\Http\HttpClient;
+use SnipForm\Resources\Clicks;
+use SnipForm\Resources\Conversions;
+use SnipForm\Resources\LinkGroups;
+use SnipForm\Resources\Links;
+use SnipForm\Resources\Session;
+use SnipForm\Resources\Signals;
 
 /**
- * Top-level Snipform client. Holds auth + HTTP, exposes resource sub-clients.
+ * Top-level SnipForm client. Holds auth + HTTP, exposes resource sub-clients.
  */
 class Client
 {

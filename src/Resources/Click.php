@@ -1,6 +1,6 @@
 <?php
 
-namespace Snipform\Resources;
+namespace SnipForm\Resources;
 
 /**
  * Typed value object for a single short-link click event.

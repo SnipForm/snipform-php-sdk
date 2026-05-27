@@ -1,9 +1,9 @@
 <?php
 
-namespace Snipform\Resources\Builders;
+namespace SnipForm\Resources\Builders;
 
-use Snipform\Http\HttpClient;
-use Snipform\Resources\Conversion;
+use SnipForm\Http\HttpClient;
+use SnipForm\Resources\Conversion;
 
 /**
  * Fluent builder for creating a new conversion definition. Returned by

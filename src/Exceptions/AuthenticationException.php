@@ -1,5 +1,5 @@
 <?php
 
-namespace Snipform\Exceptions;
+namespace SnipForm\Exceptions;
 
-class AuthenticationException extends SnipformException {}
+class AuthenticationException extends SnipFormException {}

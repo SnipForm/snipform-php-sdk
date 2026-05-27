@@ -1,8 +1,8 @@
 <?php
 
-namespace Snipform\Resources;
+namespace SnipForm\Resources;
 
-use Snipform\Http\HttpClient;
+use SnipForm\Http\HttpClient;
 
 /**
  * Short-link clicks resource. Read-only — clicks are recorded server-side

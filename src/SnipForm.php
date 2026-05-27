@@ -1,17 +1,17 @@
 <?php
 
-namespace Snipform;
+namespace SnipForm;
 
 /**
- * Snipform PHP SDK — static entry point.
+ * SnipForm PHP SDK — static entry point.
  *
- *   $snipform = Snipform::client('snipform_pat_xxx');
+ *   $snipform = SnipForm::client('xxx_access_token_xxx');
  *   $sessions = $snipform->signals()->period('last_7')->where('country', 'US')->sessions();
  */
-class Snipform
+class SnipForm
 {
     /**
-     * Create a property-scoped Snipform client.
+     * Create a property-scoped SnipForm client.
      *
      * @param  string  $token  Property API token (Personal Access Token).
      * @param  array{base_url?: string, timeout?: int}  $options

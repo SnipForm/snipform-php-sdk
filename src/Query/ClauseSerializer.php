@@ -1,9 +1,9 @@
 <?php
 
-namespace Snipform\Query;
+namespace SnipForm\Query;
 
 /**
- * Serializes Clause objects into the Snipform URL query-string DSL that the
+ * Serializes Clause objects into the SnipForm URL query-string DSL that the
  * `query[]` API parameter expects. Mirrors QueryStringParser on the server.
  *
  *   equality       country = US        → country:US

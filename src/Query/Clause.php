@@ -1,6 +1,6 @@
 <?php
 
-namespace Snipform\Query;
+namespace SnipForm\Query;
 
 /**
  * Immutable representation of a single filter clause. Lives in memory only —

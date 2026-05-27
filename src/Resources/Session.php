@@ -1,10 +1,10 @@
 <?php
 
-namespace Snipform\Resources;
+namespace SnipForm\Resources;
 
 use InvalidArgumentException;
-use Snipform\Exceptions\MissingSessionIdException;
-use Snipform\Http\HttpClient;
+use SnipForm\Exceptions\MissingSessionIdException;
+use SnipForm\Http\HttpClient;
 use Symfony\Component\HttpFoundation\Request;
 
 /**
@@ -17,13 +17,13 @@ use Symfony\Component\HttpFoundation\Request;
  *      $client->session()->event(['session_id' => $id, 'name' => 'purchase']);
  *
  *   B) Pass the incoming Request — the SDK pulls session_id from the
- *      X-Snipform-Session-Id header or the snip_session_id form field that
+ *      X-SnipForm-Session-Id header or the snip_session_id form field that
  *      signals.js sets via attachToFetch() / attachToForms():
  *      $client->session()->event($request, ['name' => 'purchase']);
  */
 class Session
 {
-    private const SESSION_HEADER = 'X-Snipform-Session-Id';
+    private const SESSION_HEADER = 'X-SnipForm-Session-Id';
 
     private const SESSION_FORM_FIELD = 'snip_session_id';
 
@@ -57,7 +57,7 @@ class Session
 
     /**
      * Submit a custom event for a session. Pass either:
-     *   - a Request (SDK extracts session_id from X-Snipform-Session-Id or snip_session_id), or
+     *   - a Request (SDK extracts session_id from X-SnipForm-Session-Id or snip_session_id), or
      *   - just the attributes array with an explicit session_id key.
      *
      * @param  Request|array  $requestOrAttributes  Symfony/Laravel Request, or attributes array if calling shorthand
@@ -97,8 +97,8 @@ class Session
     // ======================================================================
 
     /**
-     * Extract a Snipform session_id from a Symfony/Laravel Request:
-     *   1. X-Snipform-Session-Id header (attached by signals.js attachToFetch)
+     * Extract a SnipForm session_id from a Symfony/Laravel Request:
+     *   1. X-SnipForm-Session-Id header (attached by signals.js attachToFetch)
      *   2. snip_session_id body/form field (attached by attachToForms)
      *
      * Returns null if neither is present. Use this when you want to decide

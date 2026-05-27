@@ -1,11 +1,11 @@
 <?php
 
-namespace Snipform\Query;
+namespace SnipForm\Query;
 
-use Snipform\Http\HttpClient;
-use Snipform\Resources\MetricsResult;
-use Snipform\Resources\PaginatedCollection;
-use Snipform\Resources\SessionCollection;
+use SnipForm\Http\HttpClient;
+use SnipForm\Resources\MetricsResult;
+use SnipForm\Resources\PaginatedCollection;
+use SnipForm\Resources\SessionCollection;
 
 /**
  * Fluent query builder. Collects clauses + period scoping; terminal methods

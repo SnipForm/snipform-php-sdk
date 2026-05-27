@@ -1,11 +1,11 @@
 <?php
 
-namespace Snipform\Tests\Unit\Resources;
+namespace SnipForm\Tests\Unit\Resources;
 
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
-use Snipform\Http\HttpClient;
-use Snipform\Resources\Clicks;
+use SnipForm\Http\HttpClient;
+use SnipForm\Resources\Clicks;
 
 /**
  * The Clicks filter builder is fluent — verify each method appends the right

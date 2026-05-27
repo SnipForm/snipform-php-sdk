@@ -1,12 +1,12 @@
 <?php
 
-namespace Snipform\Http;
+namespace SnipForm\Http;
 
 use GuzzleHttp\Client as Guzzle;
 use GuzzleHttp\Exception\GuzzleException;
-use Snipform\Exceptions\ApiException;
-use Snipform\Exceptions\AuthenticationException;
-use Snipform\Exceptions\SnipformException;
+use SnipForm\Exceptions\ApiException;
+use SnipForm\Exceptions\AuthenticationException;
+use SnipForm\Exceptions\SnipFormException;
 
 /**
  * Internal HTTP client. Owns the Guzzle instance, applies bearer auth, and
@@ -53,7 +53,7 @@ class HttpClient
         try {
             $raw = $this->guzzle->request($method, ltrim($path, '/'), $options);
         } catch (GuzzleException $e) {
-            throw new SnipformException('HTTP transport failed: '.$e->getMessage(), 0, $e);
+            throw new SnipFormException('HTTP transport failed: '.$e->getMessage(), 0, $e);
         }
 
         $status = $raw->getStatusCode();

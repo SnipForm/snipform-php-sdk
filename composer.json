@@ -22,12 +22,12 @@
     },
     "autoload": {
         "psr-4": {
-            "Snipform\\": "src/"
+            "SnipForm\\": "src/"
         }
     },
     "autoload-dev": {
         "psr-4": {
-            "Snipform\\Tests\\": "tests/"
+            "SnipForm\\Tests\\": "tests/"
         }
     },
     "minimum-stability": "stable",

@@ -1,6 +1,6 @@
 <?php
 
-namespace Snipform\Resources;
+namespace SnipForm\Resources;
 
 /**
  * One time-bucket in a cycles response (a day, week, or month). `delta` is

@@ -1,12 +1,12 @@
 <?php
 
-namespace Snipform\Resources;
+namespace SnipForm\Resources;
 
 use Closure;
 use Countable;
 use IteratorAggregate;
-use Snipform\Http\HttpClient;
-use Snipform\Http\Response;
+use SnipForm\Http\HttpClient;
+use SnipForm\Http\Response;
 use Traversable;
 
 /**
