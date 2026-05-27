@@ -50,7 +50,7 @@ class LinkGroups
      */
     public function update(string $id, array $attributes): LinkGroup
     {
-        $row = $this->http->patch(self::PATH.'/'.$id, $attributes)->data('group');
+        $row = $this->http->post(self::PATH.'/'.$id, $attributes)->data('group');
 
         return LinkGroup::fromArray((array) $row);
     }

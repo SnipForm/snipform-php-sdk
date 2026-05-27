@@ -3,7 +3,7 @@
 Official PHP SDK for the [Snipform](https://snipform.io) API. Eloquent-flavoured query builder over the V2 endpoints.
 
 ```bash
-composer require snipform/sdk
+composer require snipform/php-sdk
 ```
 
 ## Quick start

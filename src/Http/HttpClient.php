@@ -43,11 +43,6 @@ class HttpClient
         return $this->send('POST', $path, ['json' => $payload]);
     }
 
-    public function patch(string $path, array $payload = []): Response
-    {
-        return $this->send('PATCH', $path, ['json' => $payload]);
-    }
-
     public function delete(string $path): Response
     {
         return $this->send('DELETE', $path, []);

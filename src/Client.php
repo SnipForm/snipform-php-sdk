@@ -4,6 +4,7 @@ namespace Snipform;
 
 use Snipform\Http\HttpClient;
 use Snipform\Resources\Clicks;
+use Snipform\Resources\Conversions;
 use Snipform\Resources\LinkGroups;
 use Snipform\Resources\Links;
 use Snipform\Resources\Session;
@@ -50,5 +51,10 @@ class Client
     public function clicks(): Clicks
     {
         return new Clicks($this->http);
+    }
+
+    public function conversions(): Conversions
+    {
+        return new Conversions($this->http);
     }
 }

@@ -61,7 +61,7 @@ class Links
      */
     public function update(string $id, array $attributes): Link
     {
-        $row = $this->http->patch(self::PATH.'/'.$id, $attributes)->data('link');
+        $row = $this->http->post(self::PATH.'/'.$id, $attributes)->data('link');
 
         return Link::fromArray((array) $row);
     }
