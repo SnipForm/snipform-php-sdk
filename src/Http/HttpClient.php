@@ -20,14 +20,17 @@ class HttpClient
         private readonly string $token,
         private readonly string $baseUrl,
         int $timeout = 30,
+        string $pathPrefix = '/v2/',
+        bool $verifySsl = true,
     ) {
         $this->guzzle = new Guzzle([
-            'base_uri' => rtrim($baseUrl, '/').'/api/v2/',
+            'base_uri' => rtrim($baseUrl, '/').'/'.trim($pathPrefix, '/').'/',
             'timeout' => $timeout,
+            'verify' => $verifySsl,
             'headers' => [
                 'Authorization' => 'Bearer '.$this->token,
                 'Accept' => 'application/json',
-                'User-Agent' => 'snipform-php-sdk/0.1',
+                'User-Agent' => 'snipform-php-sdk/0.2',
             ],
             'http_errors' => false,
         ]);

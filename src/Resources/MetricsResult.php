@@ -5,13 +5,15 @@ namespace SnipForm\Resources;
 use SnipForm\Http\Response;
 
 /**
- * Typed value object for the analytics-metrics endpoint payload.
+ * Typed value object for the analytics-metrics endpoint payload. Headline
+ * "current period" values only — use raw() to reach trend data (previous,
+ * difference, percent) the API also returns under each metric.
  *
  *   $metrics = $client->signals()->period('last_7')->metrics();
- *   $metrics->sessions;   // int
- *   $metrics->views;      // int
- *   $metrics->bounceRate; // float
- *   $metrics->raw();      // full body for anything we haven't typed
+ *   $metrics->sessions;    // int
+ *   $metrics->views;       // int
+ *   $metrics->bounceRate;  // float (0-100)
+ *   $metrics->raw();       // full body
  */
 class MetricsResult
 {
@@ -34,16 +36,16 @@ class MetricsResult
 
     public static function fromResponse(Response $response): self
     {
-        $analytics = (array) ($response->data('analytics') ?? []);
-        $period = $analytics['period_metrics']['data']['summary']['current'] ?? [];
+        $summary = (array) ($response->data('analytics.period_metrics.summary') ?? []);
 
         return new self(
-            sessions: (int) ($period['sessions'] ?? 0),
-            views: (int) ($period['views'] ?? 0),
-            viewsPerSession: (float) ($period['views_session'] ?? 0),
-            bounceRate: (float) ($period['bounce'] ?? 0),
-            duration: (int) ($period['duration'] ?? 0),
-            avgScroll: (float) ($period['scroll'] ?? 0),
+            sessions: (int) ($summary['sessions']['current'] ?? 0),
+            views: (int) ($summary['views']['current'] ?? 0),
+            viewsPerSession: (float) ($summary['views_session']['current'] ?? 0),
+            // API returns bounce as a 0-1 fraction; normalize to 0-100 to match field semantics.
+            bounceRate: ((float) ($summary['bounce']['current'] ?? 0)) * 100,
+            duration: (int) ($summary['duration']['current'] ?? 0),
+            avgScroll: (float) ($summary['scroll']['current'] ?? 0),
             showing: $response->data('meta.showing'),
             tookMs: (float) ($response->data('meta.took_ms') ?? 0),
             raw: $response->body,

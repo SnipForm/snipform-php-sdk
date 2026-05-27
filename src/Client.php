@@ -7,6 +7,7 @@ use SnipForm\Resources\Clicks;
 use SnipForm\Resources\Conversions;
 use SnipForm\Resources\LinkGroups;
 use SnipForm\Resources\Links;
+use SnipForm\Resources\Properties;
 use SnipForm\Resources\Session;
 use SnipForm\Resources\Signals;
 
@@ -25,7 +26,14 @@ class Client
             token: $token,
             baseUrl: $options['base_url'] ?? self::DEFAULT_BASE_URL,
             timeout: $options['timeout'] ?? 30,
+            pathPrefix: $options['path_prefix'] ?? '/v2/',
+            verifySsl: $options['verify_ssl'] ?? true,
         );
+    }
+
+    public function properties(): Properties
+    {
+        return new Properties($this->http);
     }
 
     public function signals(): Signals

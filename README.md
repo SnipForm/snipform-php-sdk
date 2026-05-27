@@ -32,6 +32,23 @@ $metrics = $snipform->signals()
 echo "Sessions: {$metrics->sessions}, bounce: {$metrics->bounceRate}%";
 ```
 
+## Property
+
+The token is scoped to a single SnipForm Property. Pull its identity + headline counts:
+
+```php
+$property = $snipform->properties()->overview();
+
+$property->id;             // string
+$property->name;           // string
+$property->domain;         // string
+$property->hasSignals;     // bool — tracking has fired at least once
+$property->state;          // string|null — raw state value
+$property->stateName;      // string|null — human label
+$property->counts;         // array — e.g. ['sessions' => 188862, 'forms' => 4, 'pages' => 2]
+$property->raw();          // full unwrapped data block
+```
+
 ## Query builder
 
 | Method | DSL emitted | Use for |
@@ -300,8 +317,10 @@ try {
 
 ```php
 SnipForm::client('snipform_pat_xxx', [
-    'base_url' => 'https://app.snipform.io',  // default
-    'timeout'  => 30,                          // seconds
+    'base_url'    => 'https://app.snipform.io',  // default
+    'path_prefix' => '/v2/',                      // default; older deployments may serve under '/api/v2/'
+    'timeout'     => 30,                          // seconds, request timeout
+    'verify_ssl'  => true,                        // default; set false for local self-signed certs
 ]);
 ```
 
