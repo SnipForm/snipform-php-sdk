@@ -15,7 +15,7 @@ $snipform = SnipForm::client('snipform_pat_xxx');
 
 // List sessions matching a query — auto-paginated
 foreach ($snipform->signals()
-    ->period('last_30')
+    ->last28Days()
     ->where('country', 'US')
     ->whereStartsWith('entry_path', '/blog')
     ->sessions() as $session
@@ -25,7 +25,7 @@ foreach ($snipform->signals()
 
 // Headline metrics for the same query
 $metrics = $snipform->signals()
-    ->period('last_7')
+    ->last7Days()
     ->where('utm_content', 'pub_12345')   // an affiliate
     ->metrics();
 
@@ -62,27 +62,45 @@ $property->raw();          // full unwrapped data block
 
 ## Query builder
 
-| Method | DSL emitted | Use for |
+The first argument to every `where*()` method is a public field **id** (the same ones in `SignalFieldMappingSet`). Field/subfield/type are resolved server-side from the id, so the wire stays small.
+
+| Method | Op | Use for |
 |---|---|---|
-| `where($field, $value)` | `field:value` or `field:a,b,c` | equality / `IN` |
-| `orWhere(...)` | `or_field:value` | OR clause |
-| `whereNot(...)` | `not_field:value` | negate |
-| `orWhereNot(...)` | `or_not_field:value` | OR negate |
-| `whereStartsWith($field, $v)` | `field:v*` | prefix |
-| `whereContains($field, $v)` | `field:*v*` | substring |
-| `whereRegex($field, $pat)` | `field:/pat/` | regex |
-| `whereGt / Gte / Lt / Lte` | `field:>n` etc. | numeric comparison |
-| `whereBetween($f, $a, $b)` | `field:[a TO b]` | range (numeric) |
-| `whereExists($f)` | `field` | field is present |
-| `whereNotExists($f)` | `not_field` | field is absent |
-| `raw(...$strings)` | as-is | escape hatch |
+| `where($id, $value)` | `equals` | equality (array value = IN) |
+| `orWhere(...)` | `equals` (where=or) | OR clause |
+| `whereNot(...)` | `equals` (not=true) | negate |
+| `orWhereNot(...)` | `equals` (where=or, not=true) | OR negate |
+| `whereStartsWith($id, $v)` | `starts_with` | prefix |
+| `whereContains($id, $v)` | `contains` | substring |
+| `whereRegex($id, $pat)` | `regex` | regex |
+| `whereGt / Gte / Lt / Lte` | `gt / gte / lt / lte` | numeric comparison |
+| `whereBetween($id, $a, $b)` | `between` | numeric range |
+| `whereExists($id)` | `exists` | field is present |
+| `whereNotExists($id)` | `exists` (not=true) | field is absent |
+
+Each clause posts as `{id, op, value, where?, not?}`. `where` and `not` are omitted at default values.
 
 ### Periods
 
+Use the typed shorthands for autocomplete, or pass a `Period` case to `period()`.
+
 ```php
-->period('last_7')                       // named bucket
+->today()
+->yesterday()
+->last7Days()
+->last28Days()
+->monthToDate()
+->yearToDate()
+->last12Months()
 ->between('2026-01-01', '2026-01-31')    // custom range
+
+// Or via the enum:
+use SnipForm\Query\Period;
+->period(Period::LAST_28)
+->period('last_28')                      // string also fine; validated upfront
 ```
+
+Invalid period strings throw `SnipForm\Exceptions\InvalidPeriodException` immediately — no HTTP round-trip.
 
 ### Sessions, lazy
 
@@ -101,7 +119,7 @@ $all    = $snipform->signals()->where('device', 'mobile')->sessions()->all(); //
 Returns a `MetricsResult` value object:
 
 ```php
-$m = $snipform->signals()->period('last_30')->metrics();
+$m = $snipform->signals()->last28Days()->metrics();
 $m->sessions;          // int
 $m->views;             // int
 $m->viewsPerSession;   // float

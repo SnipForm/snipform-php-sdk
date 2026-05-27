@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.0.3 — 2026-05-27
+
+### Added
+
+- **`Period` enum** in `SnipForm\Query\Period` — typed cases for every named period (`TODAY`, `YESTERDAY`, `LAST_7`, `LAST_28`, `MONTH_TO_DATE`, `YEAR_TO_DATE`, `LAST_12_MONTHS`, `CUSTOM`). `period()` accepts a case or a string and validates upfront.
+- **`InvalidPeriodException`** — thrown SDK-side when `period('foo')` is called with an unknown value. Carries the list of allowed values. Previous behaviour was a 500 from the server.
+- **Typed period shorthands on `Signals\Builder`**: `today()`, `yesterday()`, `last7Days()`, `last28Days()`, `monthToDate()`, `yearToDate()`, `last12Months()`. Pure IDE autocomplete — no magic strings.
+
+### Changed
+
+- **Breaking (wire format):** signals queries now post **structured clauses** under the `clauses` key instead of serialized URL-DSL strings under `query`. Each clause is `{id, op, value, where?, not?}`. Field/subfield/type are resolved server-side from the public `id` via `SignalFieldMappingSet`, so the wire payload stays small. The fluent surface on `Builder` is unchanged — only `buildPayload()` shape and the over-the-wire body differ.
+- **Removed:** `Builder::raw(...)` and `Query\ClauseSerializer`. Nested-tag clauses now go through normal `where()` calls against their public ids (e.g. `where('tags_fbclid', '...')`).
+- **Server-side period validation**: invalid periods now return a 422 with the allowed list, not a 500.
+
 ## 0.0.2 — 2026-05-27
 
 ### Added

@@ -8,23 +8,28 @@ use SnipForm\Resources\PaginatedCollection;
 use SnipForm\Resources\SessionCollection;
 
 /**
- * Fluent query builder. Collects clauses + period scoping; terminal methods
- * (sessions / metrics / graph / count) serialize and POST to the V2 API.
+ * Fluent signals query builder. Collects clauses + a period, then terminal
+ * methods (sessions / metrics) post the structured payload to the V2 API.
  *
  *   $client->signals()
- *       ->period('last_30')
+ *       ->last28Days()
  *       ->where('country', 'US')
  *       ->orWhere('country', 'CA')
  *       ->whereNot('device', 'mobile')
  *       ->whereStartsWith('entry_path', '/blog')
  *       ->sessions();
+ *
+ * Field names passed to `where*()` are the public SignalFieldMappingSet
+ * ids (e.g. `country`, `device`, `entry_path`, `utm_content`, `views`).
+ * The server resolves field/subfield/type from the id, so the wire stays
+ * small.
  */
 class Builder
 {
     /** @var list<Clause> */
     private array $clauses = [];
 
-    private ?string $period = null;
+    private Period $period = Period::LAST_7;
 
     private ?string $dateFrom = null;
 
@@ -33,23 +38,61 @@ class Builder
     public function __construct(private readonly HttpClient $http) {}
 
     // ======================================================================
-    // Period scoping
+    // Period scoping — typed shorthand (autocompletes in the IDE)
     // ======================================================================
 
-    /** Named period: last_7, last_30, last_90, today, yesterday, … */
-    public function period(string $period): self
+    public function today(): self
     {
-        $this->period = $period;
+        return $this->period(Period::TODAY);
+    }
+
+    public function yesterday(): self
+    {
+        return $this->period(Period::YESTERDAY);
+    }
+
+    public function last7Days(): self
+    {
+        return $this->period(Period::LAST_7);
+    }
+
+    public function last28Days(): self
+    {
+        return $this->period(Period::LAST_28);
+    }
+
+    public function monthToDate(): self
+    {
+        return $this->period(Period::MONTH_TO_DATE);
+    }
+
+    public function yearToDate(): self
+    {
+        return $this->period(Period::YEAR_TO_DATE);
+    }
+
+    public function last12Months(): self
+    {
+        return $this->period(Period::LAST_12_MONTHS);
+    }
+
+    /**
+     * Set the period from a `Period` case or its string value. Invalid
+     * strings throw `InvalidPeriodException` immediately — no round trip.
+     */
+    public function period(Period|string $period): self
+    {
+        $this->period = Period::coerce($period);
         $this->dateFrom = null;
         $this->dateTo = null;
 
         return $this;
     }
 
-    /** Explicit date range (Y-m-d). Sets period to 'custom'. */
+    /** Explicit Y-m-d range. Sets the period to CUSTOM. */
     public function between(string $from, string $to): self
     {
-        $this->period = 'custom';
+        $this->period = Period::CUSTOM;
         $this->dateFrom = $from;
         $this->dateTo = $to;
 
@@ -60,99 +103,82 @@ class Builder
     // Where (equality, single or multi-value via array)
     // ======================================================================
 
-    public function where(string $field, mixed $value): self
+    public function where(string $id, mixed $value): self
     {
-        return $this->push($field, 'equals', $value);
+        return $this->push($id, 'equals', $value);
     }
 
-    public function orWhere(string $field, mixed $value): self
+    public function orWhere(string $id, mixed $value): self
     {
-        return $this->push($field, 'equals', $value, or: true);
+        return $this->push($id, 'equals', $value, where: 'or');
     }
 
-    public function whereNot(string $field, mixed $value): self
+    public function whereNot(string $id, mixed $value): self
     {
-        return $this->push($field, 'equals', $value, not: true);
+        return $this->push($id, 'equals', $value, not: true);
     }
 
-    public function orWhereNot(string $field, mixed $value): self
+    public function orWhereNot(string $id, mixed $value): self
     {
-        return $this->push($field, 'equals', $value, or: true, not: true);
+        return $this->push($id, 'equals', $value, where: 'or', not: true);
     }
 
     // ======================================================================
     // Keyword ops
     // ======================================================================
 
-    public function whereStartsWith(string $field, string $value): self
+    public function whereStartsWith(string $id, string $value): self
     {
-        return $this->push($field, 'starts_with', $value);
+        return $this->push($id, 'starts_with', $value);
     }
 
-    public function whereContains(string $field, string $value): self
+    public function whereContains(string $id, string $value): self
     {
-        return $this->push($field, 'contains', $value);
+        return $this->push($id, 'contains', $value);
     }
 
-    public function whereRegex(string $field, string $pattern): self
+    public function whereRegex(string $id, string $pattern): self
     {
-        return $this->push($field, 'regex', $pattern);
+        return $this->push($id, 'regex', $pattern);
     }
 
-    public function whereExists(string $field): self
+    public function whereExists(string $id): self
     {
-        return $this->push($field, 'exists', null);
+        return $this->push($id, 'exists', null);
     }
 
-    public function whereNotExists(string $field): self
+    public function whereNotExists(string $id): self
     {
-        return $this->push($field, 'exists', null, not: true);
+        return $this->push($id, 'exists', null, not: true);
     }
 
     // ======================================================================
     // Numeric ops
     // ======================================================================
 
-    public function whereGt(string $field, int|float $value): self
+    public function whereGt(string $id, int|float $value): self
     {
-        return $this->push($field, 'gt', $value);
+        return $this->push($id, 'gt', $value);
     }
 
-    public function whereGte(string $field, int|float $value): self
+    public function whereGte(string $id, int|float $value): self
     {
-        return $this->push($field, 'gte', $value);
+        return $this->push($id, 'gte', $value);
     }
 
-    public function whereLt(string $field, int|float $value): self
+    public function whereLt(string $id, int|float $value): self
     {
-        return $this->push($field, 'lt', $value);
+        return $this->push($id, 'lt', $value);
     }
 
-    public function whereLte(string $field, int|float $value): self
+    public function whereLte(string $id, int|float $value): self
     {
-        return $this->push($field, 'lte', $value);
+        return $this->push($id, 'lte', $value);
     }
 
-    public function whereBetween(string $field, int|float $min, int|float $max): self
+    public function whereBetween(string $id, int|float $min, int|float $max): self
     {
-        return $this->push($field, 'between', [$min, $max]);
-    }
-
-    // ======================================================================
-    // Raw clause escape hatch (advanced)
-    // ======================================================================
-
-    /**
-     * Append a clause already in the URL-DSL string form. Useful for nested
-     * subfields (`tags_key:fbclid`) or anything outside the fluent surface.
-     */
-    public function raw(string ...$dslStrings): self
-    {
-        foreach ($dslStrings as $s) {
-            $this->clauses[] = new Clause(field: '__raw', op: 'raw', value: $s);
-        }
-
-        return $this;
+        return $this->push($id, 'between', [$min, $max]);
     }
 
     // ======================================================================
@@ -186,27 +212,23 @@ class Builder
     // Internals
     // ======================================================================
 
-    private function push(string $field, string $op, mixed $value, bool $or = false, bool $not = false): self
+    private function push(string $id, string $op, mixed $value, string $where = 'and', bool $not = false): self
     {
-        $this->clauses[] = new Clause($field, $op, $value, $or, $not);
+        $this->clauses[] = new Clause($id, $op, $value, $where, $not);
 
         return $this;
     }
 
     /**
-     * Compose the JSON payload posted to the V2 API. The `query` array carries
-     * serialized DSL strings; period + dates wrap it.
+     * Compose the JSON payload posted to the V2 API.
      *
      * @internal exposed for tests
      */
     public function buildPayload(array $extra = []): array
     {
         $payload = [
-            'period' => $this->period ?? 'last_7',
-            'query' => array_map(
-                fn (Clause $c) => $c->op === 'raw' ? (string) $c->value : ClauseSerializer::serialize($c),
-                $this->clauses,
-            ),
+            'period' => $this->period->value,
+            'clauses' => array_map(fn (Clause $c) => $c->toArray(), $this->clauses),
         ];
         if ($this->dateFrom && $this->dateTo) {
             $payload['date_from'] = $this->dateFrom;

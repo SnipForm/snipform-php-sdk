@@ -30,7 +30,7 @@ class HttpClient
             'headers' => [
                 'Authorization' => 'Bearer '.$this->token,
                 'Accept' => 'application/json',
-                'User-Agent' => 'snipform-php-sdk/0.2',
+                'User-Agent' => 'snipform-php-sdk/0.3',
             ],
             'http_errors' => false,
         ]);
