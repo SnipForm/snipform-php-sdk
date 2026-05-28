@@ -2,6 +2,7 @@
 
 namespace SnipForm\Resources;
 
+use JsonSerializable;
 use SnipForm\Concerns\RawAware;
 use SnipForm\Data\Click;
 use SnipForm\Http\HttpClient;
@@ -20,7 +21,7 @@ use SnipForm\Http\HttpClient;
  *
  *   $client->clicks()->find($clickId);
  */
-class Clicks
+class Clicks implements JsonSerializable
 {
     use RawAware;
 
@@ -99,5 +100,14 @@ class Clicks
         $row = (array) $this->http->get(self::PATH.'/'.$id)->data('click');
 
         return $this->hydrate($row, Click::fromArray(...));
+    }
+
+    /**
+     * Safety net for `return $client->clicks()->forLink(...)` from a
+     * controller — the chain serializes as if `all()` were called.
+     */
+    public function jsonSerialize(): mixed
+    {
+        return $this->all();
     }
 }

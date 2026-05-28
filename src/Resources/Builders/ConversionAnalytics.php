@@ -2,6 +2,7 @@
 
 namespace SnipForm\Resources\Builders;
 
+use JsonSerializable;
 use SnipForm\Concerns\RawAware;
 use SnipForm\Data\ConversionCycle;
 use SnipForm\Data\ConversionSegment;
@@ -19,7 +20,7 @@ use SnipForm\Http\HttpClient;
  *       ->filter(['channel_category' => 'paid_search'])
  *       ->summary();
  */
-class ConversionAnalytics
+class ConversionAnalytics implements JsonSerializable
 {
     use RawAware;
 
@@ -158,6 +159,16 @@ class ConversionAnalytics
             'total' => (int) ($body['total'] ?? 0),
             'has_more' => (bool) ($body['has_more'] ?? false),
         ];
+    }
+
+    /**
+     * Safety net for `return $client->conversions()->for($id)->between(...)`
+     * from a controller — the chain serializes as if `summary()` were called.
+     * Use the explicit terminal for segments / cycles / sessionsAt.
+     */
+    public function jsonSerialize(): mixed
+    {
+        return $this->summary();
     }
 
     // ----------------------------------------------------------------------

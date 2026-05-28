@@ -2,6 +2,7 @@
 
 namespace SnipForm\Query;
 
+use JsonSerializable;
 use SnipForm\Concerns\RawAware;
 use SnipForm\Data\MetricsResult;
 use SnipForm\Http\HttpClient;
@@ -25,7 +26,7 @@ use SnipForm\Resources\SessionCollection;
  * The server resolves field/subfield/type from the id, so the wire stays
  * small.
  */
-class Builder
+class Builder implements JsonSerializable
 {
     use RawAware;
 
@@ -258,6 +259,16 @@ class Builder
         }
 
         return MetricsResult::fromResponse($response);
+    }
+
+    /**
+     * Safety net for `return $client->signals()->...` from a controller —
+     * the chain serializes as if `sessions()` were called. To return the
+     * headline metrics instead, end the chain with an explicit `->metrics()`.
+     */
+    public function jsonSerialize(): mixed
+    {
+        return $this->sessions();
     }
 
     // ======================================================================
