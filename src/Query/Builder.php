@@ -99,6 +99,50 @@ class Builder
         return $this;
     }
 
+    /**
+     * Switch the period to CUSTOM. Either pass both dates inline or chain
+     * `->fromDate()` / `->toDate()` afterwards to set them piecemeal.
+     *
+     *   ->customPeriod('2026-01-01', '2026-01-31')
+     *   ->customPeriod()->fromDate('2026-01-01')->toDate('2026-01-31')
+     */
+    public function customPeriod(?string $dateFrom = null, ?string $dateTo = null): self
+    {
+        $this->period = Period::CUSTOM;
+        if ($dateFrom !== null) {
+            $this->dateFrom = $dateFrom;
+        }
+        if ($dateTo !== null) {
+            $this->dateTo = $dateTo;
+        }
+
+        return $this;
+    }
+
+    /**
+     * Set just the from-date on a CUSTOM period. Switches the period to
+     * CUSTOM if it isn't already, so callers don't have to remember.
+     */
+    public function fromDate(string $dateFrom): self
+    {
+        $this->period = Period::CUSTOM;
+        $this->dateFrom = $dateFrom;
+
+        return $this;
+    }
+
+    /**
+     * Set just the to-date on a CUSTOM period. Switches the period to
+     * CUSTOM if it isn't already.
+     */
+    public function toDate(string $dateTo): self
+    {
+        $this->period = Period::CUSTOM;
+        $this->dateTo = $dateTo;
+
+        return $this;
+    }
+
     // ======================================================================
     // Where (equality, single or multi-value via array)
     // ======================================================================
