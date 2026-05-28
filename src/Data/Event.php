@@ -15,10 +15,7 @@ class Event extends SnipFormDTO
         public readonly ?string $value,
         public readonly array $meta,
         public readonly ?int $createdTs,
-        array $raw = [],
-    ) {
-        parent::__construct($raw);
-    }
+    ) {}
 
     public static function fromArray(array $row): self
     {
@@ -30,7 +27,6 @@ class Event extends SnipFormDTO
             value: $row['value'] ?? null,
             meta: (array) ($row['meta'] ?? []),
             createdTs: isset($row['created_ts']) ? (int) $row['created_ts'] : null,
-            raw: $row,
         );
     }
 }

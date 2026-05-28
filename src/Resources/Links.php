@@ -2,6 +2,8 @@
 
 namespace SnipForm\Resources;
 
+use SnipForm\Concerns\RawAware;
+use SnipForm\Data\Link;
 use SnipForm\Http\HttpClient;
 
 /**
@@ -15,9 +17,14 @@ use SnipForm\Http\HttpClient;
  *   $link = $client->links()->create(['group_id' => ..., 'destination_url' => ..., 'domain' => ...]);
  *   $link = $client->links()->update($id, ['destination_url' => 'https://...']);
  *   $client->links()->delete($id);
+ *
+ * Append `->asRaw()` to get arrays back instead of `Link` DTOs (works for
+ * `all()`, `find()`, `create()`, `update()`).
  */
 class Links
 {
+    use RawAware;
+
     private const PATH = 'property/links';
 
     public function __construct(private readonly HttpClient $http) {}
@@ -33,34 +40,35 @@ class Links
             payload: $filters,
             factory: Link::fromArray(...),
             verb: 'GET',
+            asRaw: $this->asRaw,
         );
     }
 
-    public function find(string $id): Link
+    public function find(string $id): Link|array
     {
-        $row = $this->http->get(self::PATH.'/'.$id)->data('link');
+        $row = (array) $this->http->get(self::PATH.'/'.$id)->data('link');
 
-        return Link::fromArray((array) $row);
+        return $this->hydrate($row, Link::fromArray(...));
     }
 
     /**
      * @param  array{group_id: string, destination_url: string, domain: string, utm?: array<string,string>}  $attributes
      */
-    public function create(array $attributes): Link
+    public function create(array $attributes): Link|array
     {
-        $row = $this->http->post(self::PATH, $attributes)->data('link');
+        $row = (array) $this->http->post(self::PATH, $attributes)->data('link');
 
-        return Link::fromArray((array) $row);
+        return $this->hydrate($row, Link::fromArray(...));
     }
 
     /**
      * @param  array{destination_url?: string, domain?: string, utm?: array<string,string>, is_active?: bool}  $attributes
      */
-    public function update(string $id, array $attributes): Link
+    public function update(string $id, array $attributes): Link|array
     {
-        $row = $this->http->post(self::PATH.'/'.$id, $attributes)->data('link');
+        $row = (array) $this->http->post(self::PATH.'/'.$id, $attributes)->data('link');
 
-        return Link::fromArray((array) $row);
+        return $this->hydrate($row, Link::fromArray(...));
     }
 
     public function delete(string $id): bool

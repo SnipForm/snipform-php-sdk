@@ -2,6 +2,8 @@
 
 namespace SnipForm\Resources;
 
+use SnipForm\Concerns\RawAware;
+use SnipForm\Data\Conversion;
 use SnipForm\Http\HttpClient;
 use SnipForm\Resources\Builders\ConversionAnalytics;
 use SnipForm\Resources\Builders\ConversionBuilder;
@@ -24,9 +26,14 @@ use SnipForm\Resources\Builders\ConversionBuilder;
  *       ->save();
  *
  *   $client->conversions()->for($c->id)->since(strtotime('-30 days'))->summary();
+ *
+ * Append `->asRaw()` to get arrays back instead of Conversion DTOs (the
+ * flag is forwarded into the ConversionBuilder + ConversionAnalytics too).
  */
 class Conversions
 {
+    use RawAware;
+
     private const PATH = 'property/conversions';
 
     public function __construct(private readonly HttpClient $http) {}
@@ -35,38 +42,40 @@ class Conversions
     // Definition
     // ----------------------------------------------------------------------
 
-    /** @return array<int, Conversion> */
+    /** @return array<int, Conversion>|array<int, array> */
     public function all(): array
     {
         $rows = (array) ($this->http->get(self::PATH)->data('conversions') ?? []);
 
-        return array_map(Conversion::fromArray(...), $rows);
+        return array_map(fn (array $row) => $this->hydrate($row, Conversion::fromArray(...)), $rows);
     }
 
-    public function find(string $id): Conversion
+    public function find(string $id): Conversion|array
     {
-        $row = $this->http->get(self::PATH.'/'.$id)->data('conversion');
+        $row = (array) $this->http->get(self::PATH.'/'.$id)->data('conversion');
 
-        return Conversion::fromArray((array) $row);
+        return $this->hydrate($row, Conversion::fromArray(...));
     }
 
     /**
-     * Start a fluent build. Terminate with `->save()`.
+     * Start a fluent build. Terminate with `->save()`. Inherits the parent
+     * `asRaw` flag so `$client->conversions()->asRaw()->create()->save()`
+     * returns an array.
      */
     public function create(): ConversionBuilder
     {
-        return new ConversionBuilder($this->http);
+        return (new ConversionBuilder($this->http))->asRaw($this->asRaw);
     }
 
     /**
      * Patch basics (name / description / type / value / period / cycle).
      * Steps are replaced separately via `replaceSteps()`.
      */
-    public function update(string $id, array $attributes): Conversion
+    public function update(string $id, array $attributes): Conversion|array
     {
-        $row = $this->http->post(self::PATH.'/'.$id, $attributes)->data('conversion');
+        $row = (array) $this->http->post(self::PATH.'/'.$id, $attributes)->data('conversion');
 
-        return Conversion::fromArray((array) $row);
+        return $this->hydrate($row, Conversion::fromArray(...));
     }
 
     /**
@@ -76,25 +85,25 @@ class Conversions
      *
      * @param  array<int, array{name: string, trigger_type: string, trigger_config: array, is_required?: bool}>  $steps
      */
-    public function replaceSteps(string $id, array $steps): Conversion
+    public function replaceSteps(string $id, array $steps): Conversion|array
     {
-        $row = $this->http->post(self::PATH.'/'.$id.'/steps', ['steps' => $steps])->data('conversion');
+        $row = (array) $this->http->post(self::PATH.'/'.$id.'/steps', ['steps' => $steps])->data('conversion');
 
-        return Conversion::fromArray((array) $row);
+        return $this->hydrate($row, Conversion::fromArray(...));
     }
 
-    public function publish(string $id): Conversion
+    public function publish(string $id): Conversion|array
     {
-        $row = $this->http->post(self::PATH.'/'.$id.'/publish')->data('conversion');
+        $row = (array) $this->http->post(self::PATH.'/'.$id.'/publish')->data('conversion');
 
-        return Conversion::fromArray((array) $row);
+        return $this->hydrate($row, Conversion::fromArray(...));
     }
 
-    public function toggle(string $id): Conversion
+    public function toggle(string $id): Conversion|array
     {
-        $row = $this->http->post(self::PATH.'/'.$id.'/toggle')->data('conversion');
+        $row = (array) $this->http->post(self::PATH.'/'.$id.'/toggle')->data('conversion');
 
-        return Conversion::fromArray((array) $row);
+        return $this->hydrate($row, Conversion::fromArray(...));
     }
 
     public function delete(string $id): bool
@@ -107,11 +116,12 @@ class Conversions
     // ----------------------------------------------------------------------
 
     /**
-     * Build analytics queries for one conversion.
+     * Build analytics queries for one conversion. Inherits the parent
+     * `asRaw` flag.
      */
     public function for(string $id): ConversionAnalytics
     {
-        return new ConversionAnalytics($this->http, $id);
+        return (new ConversionAnalytics($this->http, $id))->asRaw($this->asRaw);
     }
 
     // ----------------------------------------------------------------------
@@ -120,11 +130,11 @@ class Conversions
 
     /**
      * Catalog of trigger types, conversion types, segment dimensions, and
-     * valid match modes. Use this to drive a UI or to validate inputs
-     * client-side before sending writes.
+     * valid match modes. Always returns the raw array — there's no typed
+     * shape worth hydrating here.
      */
     public function schema(): array
     {
-        return $this->http->get(self::PATH.'/schema')->all();
+        return $this->http->get(self::PATH.'/schema')->data();
     }
 }

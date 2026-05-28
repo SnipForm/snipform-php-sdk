@@ -3,6 +3,7 @@
 namespace SnipForm\Resources;
 
 use InvalidArgumentException;
+use SnipForm\Concerns\RawAware;
 use SnipForm\Data\Event;
 use SnipForm\Data\ResolveResult;
 use SnipForm\Exceptions\MissingSessionIdException;
@@ -25,6 +26,8 @@ use Symfony\Component\HttpFoundation\Request;
  */
 class Session
 {
+    use RawAware;
+
     private const SESSION_HEADER = 'X-SnipForm-Session-Id';
 
     private const SESSION_FORM_FIELD = 'snip_session_id';
@@ -42,15 +45,15 @@ class Session
      *
      * @param  Request|array{ip: string, user_agent: string, lang?: string}  $input
      */
-    public function resolve(Request|array $input): ResolveResult
+    public function resolve(Request|array $input): ResolveResult|array
     {
         $payload = $input instanceof Request
             ? $this->extractFromRequest($input)
             : $this->validateArrayInput($input);
 
-        $data = $this->http->post('property/session/resolve', $payload)->data();
+        $row = (array) $this->http->post('property/session/resolve', $payload)->data();
 
-        return ResolveResult::fromArray((array) $data);
+        return $this->hydrate($row, ResolveResult::fromArray(...));
     }
 
     // ======================================================================
@@ -67,12 +70,12 @@ class Session
      *
      * @throws MissingSessionIdException
      */
-    public function event(Request|array $requestOrAttributes, ?array $attributes = null): Event
+    public function event(Request|array $requestOrAttributes, ?array $attributes = null): Event|array
     {
         $payload = $this->payloadWithSession($requestOrAttributes, $attributes);
-        $row = $this->http->post('property/session/event', $payload)->data('event');
+        $row = (array) $this->http->post('property/session/event', $payload)->data('event');
 
-        return Event::fromArray((array) $row);
+        return $this->hydrate($row, Event::fromArray(...));
     }
 
     // ======================================================================

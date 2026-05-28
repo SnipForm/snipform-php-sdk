@@ -22,10 +22,7 @@ class ConversionSummary extends SnipFormDTO
         public readonly int $windowFrom,
         public readonly int $windowTo,
         public readonly array $funnel,
-        array $raw = [],
-    ) {
-        parent::__construct($raw);
-    }
+    ) {}
 
     public static function fromArray(array $row): self
     {
@@ -41,7 +38,6 @@ class ConversionSummary extends SnipFormDTO
             windowFrom: (int) ($window['from'] ?? 0),
             windowTo: (int) ($window['to'] ?? 0),
             funnel: $funnel,
-            raw: $row,
         );
     }
 }

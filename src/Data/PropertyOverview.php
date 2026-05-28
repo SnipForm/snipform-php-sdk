@@ -10,7 +10,6 @@ namespace SnipForm\Data;
  *   $property->domain;        // string
  *   $property->hasSignals;    // bool
  *   $property->counts;        // ['sessions' => int, 'forms' => int, 'pages' => int, ...]
- *   $property->raw();         // full unwrapped data block
  */
 class PropertyOverview extends SnipFormDTO
 {
@@ -22,10 +21,7 @@ class PropertyOverview extends SnipFormDTO
         public readonly ?string $state,
         public readonly ?string $stateName,
         public readonly array $counts,
-        array $raw = [],
-    ) {
-        parent::__construct($raw);
-    }
+    ) {}
 
     public static function fromArray(array $data): self
     {
@@ -37,7 +33,6 @@ class PropertyOverview extends SnipFormDTO
             state: isset($data['state']) ? (string) $data['state'] : null,
             stateName: isset($data['state_name']) ? (string) $data['state_name'] : null,
             counts: (array) ($data['counts'] ?? []),
-            raw: $data,
         );
     }
 }

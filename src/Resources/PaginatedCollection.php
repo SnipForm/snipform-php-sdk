@@ -27,7 +27,8 @@ class PaginatedCollection implements Countable, IteratorAggregate
     private ?int $total = null;
 
     /**
-     * @param  Closure(array): object  $factory  fn (array $row) => Item value object
+     * @param  Closure(array): object  $factory  fn (array $row) => Item value object.
+     *                                            Skipped when $asRaw is true; rows yield as plain arrays.
      */
     public function __construct(
         private readonly HttpClient $http,
@@ -36,6 +37,7 @@ class PaginatedCollection implements Countable, IteratorAggregate
         private readonly Closure $factory,
         private readonly string $verb = 'GET',
         private readonly ?string $payloadPath = null,
+        private readonly bool $asRaw = false,
     ) {}
 
     public function getIterator(): Traversable
@@ -46,7 +48,7 @@ class PaginatedCollection implements Countable, IteratorAggregate
             $rows = (array) ($body['data'] ?? []);
 
             foreach ($rows as $row) {
-                yield ($this->factory)($row);
+                yield $this->asRaw ? $row : ($this->factory)($row);
             }
 
             $lastPage = (int) ($body['last_page'] ?? $page);
@@ -79,6 +81,10 @@ class PaginatedCollection implements Countable, IteratorAggregate
         $body = $this->pageBody($this->fetchPage($page));
         $rows = (array) ($body['data'] ?? []);
 
+        if ($this->asRaw) {
+            return $rows;
+        }
+
         return array_map(fn ($r) => ($this->factory)($r), $rows);
     }
 
@@ -109,7 +115,7 @@ class PaginatedCollection implements Countable, IteratorAggregate
     private function pageBody(Response $response): array
     {
         if ($this->payloadPath === null) {
-            return $response->all();
+            return $response->data();
         }
 
         return (array) ($response->data($this->payloadPath) ?? []);

@@ -2,6 +2,8 @@
 
 namespace SnipForm\Resources;
 
+use SnipForm\Concerns\RawAware;
+use SnipForm\Data\LinkGroup;
 use SnipForm\Http\HttpClient;
 
 /**
@@ -13,46 +15,51 @@ use SnipForm\Http\HttpClient;
  *   $client->linkGroups()->create([...]);      // LinkGroup
  *   $client->linkGroups()->update($id, [...]); // LinkGroup
  *   $client->linkGroups()->delete($id);        // true
+ *
+ * Append `->asRaw()` anywhere on the chain to get the underlying API
+ * array instead of typed DTOs.
  */
 class LinkGroups
 {
+    use RawAware;
+
     private const PATH = 'property/link-groups';
 
     public function __construct(private readonly HttpClient $http) {}
 
-    /** @return array<int, LinkGroup> */
+    /** @return array<int, LinkGroup>|array<int, array> */
     public function all(): array
     {
         $rows = (array) ($this->http->get(self::PATH)->data('groups') ?? []);
 
-        return array_map(LinkGroup::fromArray(...), $rows);
+        return array_map(fn (array $row) => $this->hydrate($row, LinkGroup::fromArray(...)), $rows);
     }
 
-    public function find(string $id): LinkGroup
+    public function find(string $id): LinkGroup|array
     {
-        $row = $this->http->get(self::PATH.'/'.$id)->data('group');
+        $row = (array) $this->http->get(self::PATH.'/'.$id)->data('group');
 
-        return LinkGroup::fromArray((array) $row);
+        return $this->hydrate($row, LinkGroup::fromArray(...));
     }
 
     /**
      * @param  array{name: string, description?: string, purpose?: string, track_clicks?: bool}  $attributes
      */
-    public function create(array $attributes): LinkGroup
+    public function create(array $attributes): LinkGroup|array
     {
-        $row = $this->http->post(self::PATH, $attributes)->data('group');
+        $row = (array) $this->http->post(self::PATH, $attributes)->data('group');
 
-        return LinkGroup::fromArray((array) $row);
+        return $this->hydrate($row, LinkGroup::fromArray(...));
     }
 
     /**
      * @param  array{name?: string, description?: string, purpose?: string, track_clicks?: bool, state?: string}  $attributes
      */
-    public function update(string $id, array $attributes): LinkGroup
+    public function update(string $id, array $attributes): LinkGroup|array
     {
-        $row = $this->http->post(self::PATH.'/'.$id, $attributes)->data('group');
+        $row = (array) $this->http->post(self::PATH.'/'.$id, $attributes)->data('group');
 
-        return LinkGroup::fromArray((array) $row);
+        return $this->hydrate($row, LinkGroup::fromArray(...));
     }
 
     public function delete(string $id): bool

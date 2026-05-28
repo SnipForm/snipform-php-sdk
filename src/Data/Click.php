@@ -24,10 +24,7 @@ class Click extends SnipFormDTO
         public readonly ?string $os,
         public readonly bool $isBot,
         public readonly ?string $botName,
-        array $raw = [],
-    ) {
-        parent::__construct($raw);
-    }
+    ) {}
 
     public static function fromArray(array $row): self
     {
@@ -48,7 +45,6 @@ class Click extends SnipFormDTO
             os: $row['os'] ?? null,
             isBot: (bool) ($row['is_bot'] ?? false),
             botName: $row['bot_name'] ?? null,
-            raw: $row,
         );
     }
 }

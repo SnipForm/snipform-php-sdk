@@ -2,8 +2,9 @@
 
 namespace SnipForm\Query;
 
-use SnipForm\Http\HttpClient;
+use SnipForm\Concerns\RawAware;
 use SnipForm\Data\MetricsResult;
+use SnipForm\Http\HttpClient;
 use SnipForm\Resources\PaginatedCollection;
 use SnipForm\Resources\SessionCollection;
 
@@ -26,6 +27,8 @@ use SnipForm\Resources\SessionCollection;
  */
 class Builder
 {
+    use RawAware;
+
     /** @var list<Clause> */
     private array $clauses = [];
 
@@ -235,6 +238,7 @@ class Builder
             http: $this->http,
             payload: $this->buildPayload(['per_page' => $perPage]),
             path: 'property/signals/sessions',
+            asRaw: $this->asRaw,
         );
     }
 
@@ -242,12 +246,16 @@ class Builder
     // Terminal — analytics metrics
     // ======================================================================
 
-    public function metrics(bool $withDevices = false): MetricsResult
+    public function metrics(bool $withDevices = false): MetricsResult|array
     {
         $response = $this->http->post(
             'property/signals/analytics/metrics',
             $this->buildPayload(['show_devices' => $withDevices]),
         );
+
+        if ($this->asRaw) {
+            return (array) $response->data();
+        }
 
         return MetricsResult::fromResponse($response);
     }

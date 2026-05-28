@@ -6,14 +6,17 @@ use SnipForm\Http\Response;
 
 /**
  * Typed value object for the analytics-metrics endpoint payload. Headline
- * "current period" values only — use raw() to reach trend data (previous,
- * difference, percent) the API also returns under each metric.
+ * "current period" values only — use `->asRaw()` on the builder to reach
+ * the trend data (previous, difference, percent) the API returns under
+ * each metric.
  *
- *   $metrics = $client->signals()->period('last_7')->metrics();
+ *   $metrics = $client->signals()->last7Days()->metrics();
  *   $metrics->sessions;    // int
  *   $metrics->views;       // int
  *   $metrics->bounceRate;  // float (0-100)
- *   $metrics->raw();       // full body
+ *
+ *   $raw = $client->signals()->last7Days()->asRaw()->metrics();
+ *   $raw['analytics']['period_metrics']['summary']['sessions']['previous'];
  */
 class MetricsResult extends SnipFormDTO
 {
@@ -26,10 +29,7 @@ class MetricsResult extends SnipFormDTO
         public readonly float $avgScroll,
         public readonly ?string $showing,
         public readonly float $tookMs,
-        array $raw = [],
-    ) {
-        parent::__construct($raw);
-    }
+    ) {}
 
     public static function fromResponse(Response $response): self
     {
@@ -45,7 +45,6 @@ class MetricsResult extends SnipFormDTO
             avgScroll: (float) ($summary['scroll']['current'] ?? 0),
             showing: $response->data('meta.showing'),
             tookMs: (float) ($response->data('meta.took_ms') ?? 0),
-            raw: $response->body,
         );
     }
 }

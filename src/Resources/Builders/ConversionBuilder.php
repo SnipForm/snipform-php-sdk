@@ -2,8 +2,9 @@
 
 namespace SnipForm\Resources\Builders;
 
-use SnipForm\Http\HttpClient;
+use SnipForm\Concerns\RawAware;
 use SnipForm\Data\Conversion;
+use SnipForm\Http\HttpClient;
 
 /**
  * Fluent builder for creating a new conversion definition. Returned by
@@ -20,6 +21,8 @@ use SnipForm\Data\Conversion;
  */
 class ConversionBuilder
 {
+    use RawAware;
+
     private const PATH = 'property/conversions';
 
     private array $payload = [
@@ -148,7 +151,7 @@ class ConversionBuilder
     // Commit
     // ----------------------------------------------------------------------
 
-    public function save(): Conversion
+    public function save(): Conversion|array
     {
         $body = array_filter(
             $this->payload,
@@ -158,8 +161,8 @@ class ConversionBuilder
             $body['steps'] = $this->steps;
         }
 
-        $row = $this->http->post(self::PATH, $body)->data('conversion');
+        $row = (array) $this->http->post(self::PATH, $body)->data('conversion');
 
-        return Conversion::fromArray((array) $row);
+        return $this->hydrate($row, Conversion::fromArray(...));
     }
 }

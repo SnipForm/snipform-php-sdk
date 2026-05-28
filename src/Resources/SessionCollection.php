@@ -12,7 +12,7 @@ use SnipForm\Http\HttpClient;
  */
 class SessionCollection
 {
-    public static function for(HttpClient $http, array $payload, string $path): PaginatedCollection
+    public static function for(HttpClient $http, array $payload, string $path, bool $asRaw = false): PaginatedCollection
     {
         return new PaginatedCollection(
             http: $http,
@@ -20,6 +20,7 @@ class SessionCollection
             payload: $payload,
             factory: SessionRow::fromArray(...),
             verb: 'POST',
+            asRaw: $asRaw,
         );
     }
 }

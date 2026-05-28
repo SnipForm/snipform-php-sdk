@@ -18,10 +18,7 @@ class Link extends SnipFormDTO
         public readonly bool $isActive,
         public readonly int $clicks,
         public readonly ?int $createdTs,
-        array $raw = [],
-    ) {
-        parent::__construct($raw);
-    }
+    ) {}
 
     public function utm(string $key): ?string
     {
@@ -41,7 +38,6 @@ class Link extends SnipFormDTO
             isActive: (bool) ($row['is_active'] ?? false),
             clicks: (int) ($row['clicks'] ?? 0),
             createdTs: isset($row['created_ts']) ? (int) $row['created_ts'] : null,
-            raw: $row,
         );
     }
 }

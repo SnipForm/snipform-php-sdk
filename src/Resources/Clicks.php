@@ -2,6 +2,8 @@
 
 namespace SnipForm\Resources;
 
+use SnipForm\Concerns\RawAware;
+use SnipForm\Data\Click;
 use SnipForm\Http\HttpClient;
 
 /**
@@ -20,6 +22,8 @@ use SnipForm\Http\HttpClient;
  */
 class Clicks
 {
+    use RawAware;
+
     private const PATH = 'property/clicks';
 
     /** @var array<string, mixed> */
@@ -86,13 +90,14 @@ class Clicks
             payload: $this->filters,
             factory: Click::fromArray(...),
             verb: 'GET',
+            asRaw: $this->asRaw,
         );
     }
 
-    public function find(string $id): Click
+    public function find(string $id): Click|array
     {
-        $row = $this->http->get(self::PATH.'/'.$id)->data('click');
+        $row = (array) $this->http->get(self::PATH.'/'.$id)->data('click');
 
-        return Click::fromArray((array) $row);
+        return $this->hydrate($row, Click::fromArray(...));
     }
 }

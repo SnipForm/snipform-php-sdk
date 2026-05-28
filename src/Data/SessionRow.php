@@ -5,8 +5,8 @@ namespace SnipForm\Data;
 /**
  * Typed value object for a single SignalSession row, as the V2 API ships it.
  *
- * Only the columns most consumers want are typed; the full raw row is kept
- * accessible via ->raw() for fields we haven't surfaced.
+ * Only the columns most consumers want are typed. To reach fields we haven't
+ * surfaced, drop into raw mode on the builder: `->asRaw()->sessions()`.
  */
 class SessionRow extends SnipFormDTO
 {
@@ -34,10 +34,7 @@ class SessionRow extends SnipFormDTO
         public readonly int $timeOnSite,
         public readonly bool $bounced,
         public readonly array $tags,
-        array $raw = [],
-    ) {
-        parent::__construct($raw);
-    }
+    ) {}
 
     public static function fromArray(array $row): self
     {
@@ -65,7 +62,6 @@ class SessionRow extends SnipFormDTO
             timeOnSite: (int) ($row['time_on_site'] ?? 0),
             bounced: (bool) ($row['bounced'] ?? false),
             tags: $row['tags'] ?? [],
-            raw: $row,
         );
     }
 }

@@ -17,10 +17,7 @@ class LinkGroup extends SnipFormDTO
         public readonly int $countLinks,
         public readonly int $countClicks,
         public readonly ?string $createdAt,
-        array $raw = [],
-    ) {
-        parent::__construct($raw);
-    }
+    ) {}
 
     public static function fromArray(array $row): self
     {
@@ -34,7 +31,6 @@ class LinkGroup extends SnipFormDTO
             countLinks: (int) ($row['count_links'] ?? 0),
             countClicks: (int) ($row['count_clicks'] ?? 0),
             createdAt: $row['created_at'] ?? null,
-            raw: $row,
         );
     }
 }

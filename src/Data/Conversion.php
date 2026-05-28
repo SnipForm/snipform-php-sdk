@@ -26,10 +26,7 @@ class Conversion extends SnipFormDTO
         public readonly ?string $defaultPeriod,
         public readonly ?string $defaultCycle,
         public readonly array $steps,
-        array $raw = [],
-    ) {
-        parent::__construct($raw);
-    }
+    ) {}
 
     public function isDraft(): bool
     {
@@ -58,7 +55,6 @@ class Conversion extends SnipFormDTO
             defaultPeriod: $row['default_period'] ?? null,
             defaultCycle: $row['default_cycle'] ?? null,
             steps: $steps,
-            raw: $row,
         );
     }
 }

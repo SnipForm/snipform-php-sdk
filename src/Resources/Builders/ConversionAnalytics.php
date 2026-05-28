@@ -2,10 +2,11 @@
 
 namespace SnipForm\Resources\Builders;
 
-use SnipForm\Http\HttpClient;
+use SnipForm\Concerns\RawAware;
 use SnipForm\Data\ConversionCycle;
 use SnipForm\Data\ConversionSegment;
 use SnipForm\Data\ConversionSummary;
+use SnipForm\Http\HttpClient;
 
 /**
  * Fluent reads for one conversion. Built via `$client->conversions()->for($id)`.
@@ -20,6 +21,8 @@ use SnipForm\Data\ConversionSummary;
  */
 class ConversionAnalytics
 {
+    use RawAware;
+
     private ?int $from = null;
 
     private ?int $to = null;
@@ -67,18 +70,18 @@ class ConversionAnalytics
     // Terminals
     // ----------------------------------------------------------------------
 
-    public function summary(): ConversionSummary
+    public function summary(): ConversionSummary|array
     {
-        $body = $this->http->post($this->base().'/summary', $this->windowPayload())->all();
+        $body = $this->http->post($this->base().'/summary', $this->windowPayload())->data();
 
-        return ConversionSummary::fromArray($body);
+        return $this->hydrate($body, ConversionSummary::fromArray(...));
     }
 
     /**
      * Slice the funnel by a flat dimension (channel_category, source_id,
      * utm_medium, request_country, request_device, entry_path, etc.).
      *
-     * @return array<int, ConversionSegment>
+     * @return array<int, ConversionSegment>|array<int, array>
      */
     public function segments(string $dimension): array
     {
@@ -87,14 +90,14 @@ class ConversionAnalytics
             $this->windowPayload(['dimension' => $dimension])
         )->data('segments') ?? []);
 
-        return array_map(ConversionSegment::fromArray(...), $rows);
+        return array_map(fn (array $row) => $this->hydrate($row, ConversionSegment::fromArray(...)), $rows);
     }
 
     /**
      * Slice by a custom tag key (anything you've set via `signals.tag()` on the
      * tracker side, e.g. `campaign_phase`, `experiment_arm`).
      *
-     * @return array<int, ConversionSegment>
+     * @return array<int, ConversionSegment>|array<int, array>
      */
     public function segmentsByTag(string $tagKey): array
     {
@@ -103,12 +106,12 @@ class ConversionAnalytics
             $this->windowPayload(['tag_key' => $tagKey])
         )->data('segments') ?? []);
 
-        return array_map(ConversionSegment::fromArray(...), $rows);
+        return array_map(fn (array $row) => $this->hydrate($row, ConversionSegment::fromArray(...)), $rows);
     }
 
     /**
      * @param  string  $interval  day | week | month
-     * @return array{cycles: array<int, ConversionCycle>, has_more: bool, page: int, interval: string}
+     * @return array{cycles: array<int, ConversionCycle>|array<int, array>, has_more: bool, page: int, interval: string}
      */
     public function cycles(string $interval, int $page = 0, int $perPage = 6): array
     {
@@ -117,10 +120,13 @@ class ConversionAnalytics
             'page' => $page,
             'per_page' => $perPage,
             'filter' => $this->filter,
-        ])->all();
+        ])->data();
 
         return [
-            'cycles' => array_map(ConversionCycle::fromArray(...), (array) ($body['cycles'] ?? [])),
+            'cycles' => array_map(
+                fn (array $row) => $this->hydrate($row, ConversionCycle::fromArray(...)),
+                (array) ($body['cycles'] ?? []),
+            ),
             'has_more' => (bool) ($body['has_more'] ?? false),
             'page' => (int) ($body['page'] ?? 0),
             'interval' => (string) ($body['interval'] ?? $interval),
@@ -143,7 +149,7 @@ class ConversionAnalytics
             'step_id' => $stepId,
             'page' => $page,
             'per_page' => $perPage,
-        ])->all();
+        ])->data();
 
         return [
             'sessions' => (array) ($body['sessions'] ?? []),
