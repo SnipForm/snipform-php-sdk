@@ -3,7 +3,7 @@
 namespace SnipForm\Resources\Builders;
 
 use SnipForm\Http\HttpClient;
-use SnipForm\Resources\Conversion;
+use SnipForm\Data\Conversion;
 
 /**
  * Fluent builder for creating a new conversion definition. Returned by

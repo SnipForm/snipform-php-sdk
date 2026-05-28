@@ -9,32 +9,31 @@ use SnipForm\Query\Builder;
  * Signals resource — entry to the session/analytics endpoints.
  *
  *   $client->signals()
- *       ->period('last_30')
+ *       ->last28Days()
  *       ->where('country', 'US')
  *       ->sessions();
  *
- * The resource is a thin spawner: every fluent call lives on Query\Builder.
+ * `Signals` IS a `Builder` — every call to `$client->signals()` returns a
+ * fresh instance, so each starting chain has its own clauses + period.
+ * Inheriting (rather than holding a Builder + magic __call) gives the IDE
+ * full autocomplete over the fluent surface.
  */
-class Signals
+class Signals extends Builder
 {
-    public function __construct(private readonly HttpClient $http) {}
-
-    /**
-     * Start a new query. Each call returns a fresh builder so you can hold
-     * multiple in flight without state leaking between them.
-     */
-    public function query(): Builder
+    public function __construct(HttpClient $http)
     {
-        return new Builder($this->http);
+        parent::__construct($http);
     }
 
-    // ----------------------------------------------------------------------
-    // Pass-throughs — let `$client->signals()->where(...)` chain without
-    // requiring users to call ->query() explicitly.
-    // ----------------------------------------------------------------------
-
-    public function __call(string $method, array $args): mixed
+    /**
+     * Back-compat — older code calls `->query()` to start a chain. The
+     * Signals resource itself is already a builder, so this just returns
+     * `$this`. Prefer chaining directly: `$client->signals()->where(...)`.
+     *
+     * @deprecated since 0.0.4 — call methods on `signals()` directly.
+     */
+    public function query(): self
     {
-        return $this->query()->{$method}(...$args);
+        return $this;
     }
 }

@@ -1,6 +1,6 @@
 <?php
 
-namespace SnipForm\Resources;
+namespace SnipForm\Data;
 
 /**
  * Typed value object for a short-link group.

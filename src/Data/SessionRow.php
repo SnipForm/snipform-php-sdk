@@ -1,6 +1,6 @@
 <?php
 
-namespace SnipForm\Resources;
+namespace SnipForm\Data;
 
 /**
  * Typed value object for a single SignalSession row, as the V2 API ships it.

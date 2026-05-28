@@ -2,7 +2,7 @@
 
 namespace SnipForm\Tests\Integration;
 
-use SnipForm\Resources\MetricsResult;
+use SnipForm\Data\MetricsResult;
 
 /**
  * Live signals queries against a local SnipForm deployment. Skipped when

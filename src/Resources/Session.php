@@ -3,6 +3,8 @@
 namespace SnipForm\Resources;
 
 use InvalidArgumentException;
+use SnipForm\Data\Event;
+use SnipForm\Data\ResolveResult;
 use SnipForm\Exceptions\MissingSessionIdException;
 use SnipForm\Http\HttpClient;
 use Symfony\Component\HttpFoundation\Request;
@@ -62,6 +64,8 @@ class Session
      *
      * @param  Request|array  $requestOrAttributes  Symfony/Laravel Request, or attributes array if calling shorthand
      * @param  array{name: string, value?: mixed, meta?: array}|null  $attributes  required when first arg is a Request
+     *
+     * @throws MissingSessionIdException
      */
     public function event(Request|array $requestOrAttributes, ?array $attributes = null): Event
     {
@@ -81,7 +85,9 @@ class Session
      * session_id.
      *
      * @param  array{cost?: int, value?: int, currency_code?: string, tags?: array<string>}|null  $attributes
+     *
      * @return array{id: string, acquisition_meta: array}
+     * @throws MissingSessionIdException
      */
     public function acquisition(Request|array $requestOrAttributes, ?array $attributes = null): array
     {

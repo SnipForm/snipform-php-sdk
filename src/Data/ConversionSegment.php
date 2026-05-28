@@ -1,6 +1,6 @@
 <?php
 
-namespace SnipForm\Resources;
+namespace SnipForm\Data;
 
 /**
  * One row in a segments response — a slice of the funnel by a dimension or

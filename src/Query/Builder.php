@@ -3,7 +3,7 @@
 namespace SnipForm\Query;
 
 use SnipForm\Http\HttpClient;
-use SnipForm\Resources\MetricsResult;
+use SnipForm\Data\MetricsResult;
 use SnipForm\Resources\PaginatedCollection;
 use SnipForm\Resources\SessionCollection;
 

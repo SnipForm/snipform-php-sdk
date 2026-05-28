@@ -16,7 +16,7 @@ use SnipForm\Resources\Signals;
  */
 class Client
 {
-    private const DEFAULT_BASE_URL = 'https://app.snipform.io';
+    private const DEFAULT_BASE_URL = 'https://api.snipform.io';
 
     public readonly HttpClient $http;
 

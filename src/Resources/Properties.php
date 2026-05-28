@@ -2,6 +2,7 @@
 
 namespace SnipForm\Resources;
 
+use SnipForm\Data\PropertyOverview;
 use SnipForm\Http\HttpClient;
 
 /**

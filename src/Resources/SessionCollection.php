@@ -2,11 +2,13 @@
 
 namespace SnipForm\Resources;
 
+use SnipForm\Data\SessionRow;
 use SnipForm\Http\HttpClient;
 
 /**
  * Session-typed paginated collection. Thin factory over PaginatedCollection
- * wired with the session endpoint's nested Laravel-paginator shape.
+ * wired for the signals/sessions endpoint, which posts the structured query
+ * + period and returns Laravel's native paginator JSON at the root.
  */
 class SessionCollection
 {
@@ -16,9 +18,6 @@ class SessionCollection
             http: $http,
             path: $path,
             payload: $payload,
-            itemsPath: 'sessions.data',
-            totalPath: 'sessions.total',
-            lastPagePath: 'sessions.last_page',
             factory: SessionRow::fromArray(...),
             verb: 'POST',
         );

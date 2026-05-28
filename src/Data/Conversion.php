@@ -1,6 +1,6 @@
 <?php
 
-namespace SnipForm\Resources;
+namespace SnipForm\Data;
 
 /**
  * A conversion definition. Returned by Conversions::find(), Conversions::all(),

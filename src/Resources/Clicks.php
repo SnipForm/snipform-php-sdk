@@ -84,9 +84,6 @@ class Clicks
             http: $this->http,
             path: self::PATH,
             payload: $this->filters,
-            itemsPath: 'clicks',
-            totalPath: 'meta.total',
-            lastPagePath: 'meta.last_page',
             factory: Click::fromArray(...),
             verb: 'GET',
         );

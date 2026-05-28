@@ -346,7 +346,7 @@ try {
 
 ```php
 SnipForm::client('snipform_pat_xxx', [
-    'base_url'    => 'https://app.snipform.io',  // default
+    'base_url'    => 'https://api.snipform.io',  // default
     'path_prefix' => '/v2/',                      // default; older deployments may serve under '/api/v2/'
     'timeout'     => 30,                          // seconds, request timeout
     'verify_ssl'  => true,                        // default; set false for local self-signed certs

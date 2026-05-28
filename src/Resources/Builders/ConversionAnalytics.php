@@ -3,9 +3,9 @@
 namespace SnipForm\Resources\Builders;
 
 use SnipForm\Http\HttpClient;
-use SnipForm\Resources\ConversionCycle;
-use SnipForm\Resources\ConversionSegment;
-use SnipForm\Resources\ConversionSummary;
+use SnipForm\Data\ConversionCycle;
+use SnipForm\Data\ConversionSegment;
+use SnipForm\Data\ConversionSummary;
 
 /**
  * Fluent reads for one conversion. Built via `$client->conversions()->for($id)`.

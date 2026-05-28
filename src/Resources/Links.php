@@ -31,9 +31,6 @@ class Links
             http: $this->http,
             path: self::PATH,
             payload: $filters,
-            itemsPath: 'links',
-            totalPath: 'meta.total',
-            lastPagePath: 'meta.last_page',
             factory: Link::fromArray(...),
             verb: 'GET',
         );
