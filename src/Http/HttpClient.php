@@ -62,14 +62,20 @@ class HttpClient
         $status = $raw->getStatusCode();
         $body = json_decode((string) $raw->getBody(), true) ?? [];
 
+        // The API wraps every response in {code, status, data: {...}}, so error
+        // info (message / errors) hides one level deeper. Look in both places.
+        $inner = is_array($body['data'] ?? null) ? $body['data'] : [];
+        $message = $body['message'] ?? $inner['message'] ?? null;
+        $errors = $inner['errors'] ?? $body['errors'] ?? [];
+
         if ($status === 401 || $status === 403) {
-            throw new AuthenticationException($body['message'] ?? 'Unauthenticated', $status);
+            throw new AuthenticationException($message ?? 'Unauthenticated', $status);
         }
         if ($status >= 400) {
             throw new ApiException(
-                message: $body['message'] ?? "API error ({$status})",
+                message: ApiException::format($message, $status, $errors),
                 status: $status,
-                errors: $body['errors'] ?? [],
+                errors: $errors,
                 body: $body,
             );
         }
