@@ -6,6 +6,7 @@ use Closure;
 use Countable;
 use IteratorAggregate;
 use JsonSerializable;
+use SnipForm\Data\Page;
 use SnipForm\Http\HttpClient;
 use SnipForm\Http\Response;
 use Traversable;
@@ -15,10 +16,10 @@ use Traversable;
  * JSON shape (`data`, `current_page`, `last_page`, `total`, `next_page_url`,
  * `per_page`, ...).
  *
- *   foreach ($client->links()->all() as $link) { ... }   // walks every page
- *   $client->links()->all()->count();                    // total via meta
- *   $client->links()->all()->page(2);                    // single page array
- *   $client->links()->all()->first();                    // terminates after one
+ *   foreach ($client->links()->all() as $link) { ... }    // walks every page
+ *   $client->links()->all()->count();                     // total via meta
+ *   $client->links()->all()->page(2);                     // → Page (items + meta + ->next()/->prev())
+ *   $client->links()->all()->first();                     // first item across all pages
  *
  * Pass `payloadPath` for endpoints that nest the paginator under a key —
  * e.g. `'sessions'` for an endpoint returning `{sessions: {data: [...]}}`.
@@ -61,7 +62,7 @@ class PaginatedCollection implements Countable, IteratorAggregate, JsonSerializa
     }
 
     /** First match (or null) — terminates after one row. */
-    public function first(): ?object
+    public function first(): mixed
     {
         foreach ($this as $item) {
             return $item;
@@ -76,17 +77,38 @@ class PaginatedCollection implements Countable, IteratorAggregate, JsonSerializa
         return iterator_to_array($this, preserve_keys: false);
     }
 
-    /** Single page as an array of typed items — no auto-pagination. */
-    public function page(int $page): array
+    /**
+     * Fetch a specific page. Returns a {@see Page} object carrying items
+     * plus the full Laravel paginator meta and navigation helpers
+     * (`->next()`, `->prev()`, `->first()`, `->last()`).
+     *
+     * Back-compat: Page is iterable + countable + array-accessible, so
+     * existing `foreach`/`count`/`$page[0]` usage on the return value of
+     * `->page(N)` still works.
+     */
+    public function page(int $page): Page
     {
         $body = $this->pageBody($this->fetchPage($page));
         $rows = (array) ($body['data'] ?? []);
+        $items = $this->asRaw
+            ? $rows
+            : array_map(fn ($r) => ($this->factory)($r), $rows);
 
-        if ($this->asRaw) {
-            return $rows;
-        }
-
-        return array_map(fn ($r) => ($this->factory)($r), $rows);
+        return new Page(
+            items: $items,
+            currentPage: (int) ($body['current_page'] ?? $page),
+            lastPage: (int) ($body['last_page'] ?? 1),
+            total: (int) ($body['total'] ?? count($items)),
+            perPage: (int) ($body['per_page'] ?? count($items)),
+            from: isset($body['from']) ? (int) $body['from'] : null,
+            to: isset($body['to']) ? (int) $body['to'] : null,
+            nextPageUrl: $body['next_page_url'] ?? null,
+            prevPageUrl: $body['prev_page_url'] ?? null,
+            firstPageUrl: $body['first_page_url'] ?? null,
+            lastPageUrl: $body['last_page_url'] ?? null,
+            raw: $body,
+            collection: $this,
+        );
     }
 
     public function count(): int
@@ -100,25 +122,16 @@ class PaginatedCollection implements Countable, IteratorAggregate, JsonSerializa
     }
 
     /**
-     * Serialize as Laravel's pagination JSON shape — `data` is page 1 of
-     * items (hydrated via the factory unless `asRaw` is set), plus the
-     * paginator meta (`current_page`, `last_page`, `total`, `next_page_url`,
-     * …). Lets a Laravel controller `return $client->signals()->sessions();`
+     * Serialize as Laravel's pagination JSON shape for page 1 — items
+     * (hydrated via the factory unless `asRaw` is set) plus the paginator
+     * meta. Lets a Laravel controller `return $client->signals()->sessions();`
      * directly without iterating.
      *
-     * Only page 1 is serialized. Iterating the collection and *then*
-     * returning it does NOT preserve walked state — a fresh page-1 fetch
-     * happens on serialize.
+     * For a specific page, return the Page directly: `return $coll->page(2);`
      */
     public function jsonSerialize(): array
     {
-        $body = $this->pageBody($this->fetchPage(1));
-        $rows = (array) ($body['data'] ?? []);
-        $body['data'] = $this->asRaw
-            ? $rows
-            : array_map(fn ($r) => ($this->factory)($r), $rows);
-
-        return $body;
+        return $this->page(1)->jsonSerialize();
     }
 
     private function fetchPage(int $page): Response

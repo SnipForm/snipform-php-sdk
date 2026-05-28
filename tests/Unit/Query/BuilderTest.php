@@ -3,10 +3,12 @@
 namespace SnipForm\Tests\Unit\Query;
 
 use PHPUnit\Framework\TestCase;
+use SnipForm\Exceptions\IncompatibleFieldOperator;
 use SnipForm\Exceptions\InvalidPeriodException;
 use SnipForm\Http\HttpClient;
 use SnipForm\Query\Builder;
 use SnipForm\Query\Period;
+use SnipForm\Query\SessionField;
 
 /**
  * BuilderTest covers the structured-clause + typed-period wire format.
@@ -165,6 +167,63 @@ class BuilderTest extends TestCase
         $this->assertSame([
             ['id' => 'bounced', 'op' => 'exists', 'value' => null],
             ['id' => 'utm_source', 'op' => 'exists', 'value' => null, 'not' => true],
+        ], $payload['clauses']);
+    }
+
+    // ----------------------------------------------------------------------
+    // SessionField enum
+    // ----------------------------------------------------------------------
+
+    public function test_session_field_enum_serializes_to_wire_id(): void
+    {
+        $payload = $this->builder()
+            ->where(SessionField::COUNTRY, 'US')
+            ->whereBetween(SessionField::TIME_ON_SITE, 60, 300)
+            ->buildPayload();
+
+        $this->assertSame([
+            ['id' => 'country', 'op' => 'equals', 'value' => 'US'],
+            ['id' => 'time_on_site', 'op' => 'between', 'value' => [60, 300]],
+        ], $payload['clauses']);
+    }
+
+    public function test_enum_and_string_mix_freely(): void
+    {
+        $payload = $this->builder()
+            ->where(SessionField::DEVICE, 'mobile')
+            ->where('country', 'US')           // bare string still accepted
+            ->buildPayload();
+
+        $this->assertSame([
+            ['id' => 'device', 'op' => 'equals', 'value' => 'mobile'],
+            ['id' => 'country', 'op' => 'equals', 'value' => 'US'],
+        ], $payload['clauses']);
+    }
+
+    public function test_numeric_op_on_keyword_field_throws(): void
+    {
+        $this->expectException(IncompatibleFieldOperator::class);
+        $this->expectExceptionMessage('Operator `between` is not valid for field `country` (type: keyword)');
+
+        $this->builder()->whereBetween(SessionField::COUNTRY, 0, 10);
+    }
+
+    public function test_starts_with_on_numeric_field_throws(): void
+    {
+        $this->expectException(IncompatibleFieldOperator::class);
+        $this->expectExceptionMessage('Operator `starts_with` is not valid for field `views` (type: int)');
+
+        $this->builder()->whereStartsWith(SessionField::VIEWS, '3');
+    }
+
+    public function test_string_ids_skip_field_type_validation(): void
+    {
+        // Bare-string callers are power-user escape hatches — the SDK doesn't
+        // know the type without an enum case, so it doesn't enforce. The
+        // server still rejects nonsense, but no SDK-side error fires.
+        $payload = $this->builder()->whereBetween('country', 0, 10)->buildPayload();
+        $this->assertSame([
+            ['id' => 'country', 'op' => 'between', 'value' => [0, 10]],
         ], $payload['clauses']);
     }
 }

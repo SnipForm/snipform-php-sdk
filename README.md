@@ -40,6 +40,7 @@ echo "Sessions: {$metrics->sessions}, bounce: {$metrics->bounceRate}%";
 - [Signals query builder](#signals-query-builder)
   - [Periods](#periods)
   - [Sessions](#sessions-lazy)
+  - [Pages](#pages--explicit-pagination)
   - [Metrics](#metrics)
 - [Short links](#short-links)
 - [Session actions](#session-actions)
@@ -102,7 +103,35 @@ $property->counts;         // array — e.g. ['sessions' => 188862, 'forms' => 4
 
 ## Signals query builder
 
-The first argument to every `where*()` method is a public field **id** (the same ones in `SignalFieldMappingSet`). Field/subfield/type are resolved server-side from the id, so the wire stays small.
+The first argument to every `where*()` method is a public field id. Pass it as a `SessionField` enum case (IDE-discoverable, type-checked) or as a bare string (escape hatch, no SDK-side validation).
+
+```php
+use SnipForm\Query\SessionField;
+
+$snipform->signals()
+    ->where(SessionField::COUNTRY, 'US')
+    ->whereBetween(SessionField::TIME_ON_SITE, 60, 300)
+    ->whereStartsWith(SessionField::ENTRY_PATH, '/blog')
+    ->sessions();
+
+// Strings still work — the SDK doesn't know the field's type without an
+// enum case, so op/field mismatches won't be caught client-side:
+$snipform->signals()->where('country', 'US')->sessions();
+```
+
+Field/subfield/type are resolved server-side from the id, so the wire stays small.
+
+**Type-safe operators**: when you pass an enum case, the SDK validates the operator against the field's type and throws `IncompatibleFieldOperator` *before* HTTP:
+
+```php
+$snipform->signals()->whereBetween(SessionField::COUNTRY, 0, 10);
+// → IncompatibleFieldOperator: Operator `between` is not valid for field
+//   `country` (type: keyword). Valid ops: equals, contains, starts_with,
+//   regex, exists.
+```
+
+`SessionField` cases are grouped by concern: entry/exit page, referrer, tags, geo, browser/device/OS, bot detection, channel + UTM attribution, acquisition value, short links, forms, events, session metrics. Bare string fallback covers anything new the server adds before the enum catches up.
+
 
 | Method | Op | Use for |
 |---|---|---|
@@ -156,8 +185,66 @@ Invalid period strings throw `SnipForm\Exceptions\InvalidPeriodException` immedi
 foreach ($snipform->signals()->where('device', 'mobile')->sessions() as $session) { ... }
 $first  = $snipform->signals()->where('device', 'mobile')->sessions()->first();
 $total  = $snipform->signals()->where('device', 'mobile')->sessions()->count();
-$page2  = $snipform->signals()->where('device', 'mobile')->sessions()->page(2);
 $all    = $snipform->signals()->where('device', 'mobile')->sessions()->all(); // careful
+```
+
+### Pages — explicit pagination
+
+`->page($n)` returns a `Data\Page` object that carries the page's items *plus* the full Laravel paginator meta and navigation methods. One HTTP call gives you both — no separate `->count()`.
+
+```php
+$page = $snipform->signals()->sessions(20)->page(2);
+
+$page->items;          // SessionRow[]   (or array[] in asRaw)
+$page->currentPage;    // 2
+$page->lastPage;       // 5
+$page->total;          // 230
+$page->perPage;        // 20
+$page->from;           // 21
+$page->to;             // 40
+$page->nextPageUrl;    // string|null
+$page->prevPageUrl;    // string|null
+$page->hasMore();      // bool
+$page->isFirstPage();
+$page->isLastPage();
+
+// Navigation — each is one HTTP call, returns the related Page
+$next  = $page->next();    // → Page 3, or null when on last page
+$prev  = $page->prev();    // → Page 1, or null when on first page
+$first = $page->first();
+$last  = $page->last();
+
+// Jump by URL — pass any of the paginator URLs (or a link from the
+// Laravel-style `links` array) and the SDK parses the `page` query param.
+$jump = $page->pageLink($page->nextPageUrl);
+$jump = $page->pageLink('https://api.snipform.io/v2/.../sessions?page=7');
+
+// Render numbered page links from Laravel's `links` collection
+foreach ($page->raw()['links'] ?? [] as $link) {
+    if ($link['url']) {
+        $other = $page->pageLink($link['url']);
+    }
+}
+```
+
+`Page` is iterable, countable, and array-accessible — so existing `foreach`/`count`/`$page[0]` usage keeps working:
+
+```php
+foreach ($snipform->signals()->sessions()->page(2) as $session) { ... }
+$rowsOnThisPage = count($page);   // count of items on THIS page (not total)
+$first = $page[0];
+```
+
+Returning a `Page` from a Laravel controller serializes it as the standard Laravel paginator JSON for that page:
+
+```php
+public function sessions(SnipForm $snipform, Request $request)
+{
+    return $snipform->signals()
+        ->last28Days()
+        ->sessions(20)
+        ->page((int) $request->input('page', 1));
+}
 ```
 
 ### Metrics

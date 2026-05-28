@@ -5,6 +5,7 @@ namespace SnipForm\Query;
 use JsonSerializable;
 use SnipForm\Concerns\RawAware;
 use SnipForm\Data\MetricsResult;
+use SnipForm\Exceptions\IncompatibleFieldOperator;
 use SnipForm\Http\HttpClient;
 use SnipForm\Resources\PaginatedCollection;
 use SnipForm\Resources\SessionCollection;
@@ -151,22 +152,22 @@ class Builder implements JsonSerializable
     // Where (equality, single or multi-value via array)
     // ======================================================================
 
-    public function where(string $id, mixed $value): self
+    public function where(SessionField|string $id, mixed $value): self
     {
         return $this->push($id, 'equals', $value);
     }
 
-    public function orWhere(string $id, mixed $value): self
+    public function orWhere(SessionField|string $id, mixed $value): self
     {
         return $this->push($id, 'equals', $value, where: 'or');
     }
 
-    public function whereNot(string $id, mixed $value): self
+    public function whereNot(SessionField|string $id, mixed $value): self
     {
         return $this->push($id, 'equals', $value, not: true);
     }
 
-    public function orWhereNot(string $id, mixed $value): self
+    public function orWhereNot(SessionField|string $id, mixed $value): self
     {
         return $this->push($id, 'equals', $value, where: 'or', not: true);
     }
@@ -175,27 +176,33 @@ class Builder implements JsonSerializable
     // Keyword ops
     // ======================================================================
 
-    public function whereStartsWith(string $id, string $value): self
+    public function whereStartsWith(SessionField|string $id, string $value): self
     {
+        $this->assertKeyword($id, 'starts_with');
+
         return $this->push($id, 'starts_with', $value);
     }
 
-    public function whereContains(string $id, string $value): self
+    public function whereContains(SessionField|string $id, string $value): self
     {
+        $this->assertKeyword($id, 'contains');
+
         return $this->push($id, 'contains', $value);
     }
 
-    public function whereRegex(string $id, string $pattern): self
+    public function whereRegex(SessionField|string $id, string $pattern): self
     {
+        $this->assertKeyword($id, 'regex');
+
         return $this->push($id, 'regex', $pattern);
     }
 
-    public function whereExists(string $id): self
+    public function whereExists(SessionField|string $id): self
     {
         return $this->push($id, 'exists', null);
     }
 
-    public function whereNotExists(string $id): self
+    public function whereNotExists(SessionField|string $id): self
     {
         return $this->push($id, 'exists', null, not: true);
     }
@@ -204,28 +211,38 @@ class Builder implements JsonSerializable
     // Numeric ops
     // ======================================================================
 
-    public function whereGt(string $id, int|float $value): self
+    public function whereGt(SessionField|string $id, int|float $value): self
     {
+        $this->assertNumeric($id, 'gt');
+
         return $this->push($id, 'gt', $value);
     }
 
-    public function whereGte(string $id, int|float $value): self
+    public function whereGte(SessionField|string $id, int|float $value): self
     {
+        $this->assertNumeric($id, 'gte');
+
         return $this->push($id, 'gte', $value);
     }
 
-    public function whereLt(string $id, int|float $value): self
+    public function whereLt(SessionField|string $id, int|float $value): self
     {
+        $this->assertNumeric($id, 'lt');
+
         return $this->push($id, 'lt', $value);
     }
 
-    public function whereLte(string $id, int|float $value): self
+    public function whereLte(SessionField|string $id, int|float $value): self
     {
+        $this->assertNumeric($id, 'lte');
+
         return $this->push($id, 'lte', $value);
     }
 
-    public function whereBetween(string $id, int|float $min, int|float $max): self
+    public function whereBetween(SessionField|string $id, int|float $min, int|float $max): self
     {
+        $this->assertNumeric($id, 'between');
+
         return $this->push($id, 'between', [$min, $max]);
     }
 
@@ -275,11 +292,39 @@ class Builder implements JsonSerializable
     // Internals
     // ======================================================================
 
-    private function push(string $id, string $op, mixed $value, string $where = 'and', bool $not = false): self
+    private function push(SessionField|string $id, string $op, mixed $value, string $where = 'and', bool $not = false): self
     {
-        $this->clauses[] = new Clause($id, $op, $value, $where, $not);
+        $this->clauses[] = new Clause(
+            $id instanceof SessionField ? $id->value : $id,
+            $op,
+            $value,
+            $where,
+            $not,
+        );
 
         return $this;
+    }
+
+    /**
+     * Numeric-only op guard. String IDs pass silently (we can't know their
+     * type without a server round-trip); enum cases are validated against
+     * their declared `FieldType`.
+     */
+    private function assertNumeric(SessionField|string $id, string $op): void
+    {
+        if ($id instanceof SessionField && ! $id->type()->isNumeric()) {
+            throw IncompatibleFieldOperator::for($id, $op);
+        }
+    }
+
+    /**
+     * Keyword-only op guard — see assertNumeric().
+     */
+    private function assertKeyword(SessionField|string $id, string $op): void
+    {
+        if ($id instanceof SessionField && $id->type() !== FieldType::KEYWORD) {
+            throw IncompatibleFieldOperator::for($id, $op);
+        }
     }
 
     /**
