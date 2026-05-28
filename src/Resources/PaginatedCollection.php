@@ -5,6 +5,7 @@ namespace SnipForm\Resources;
 use Closure;
 use Countable;
 use IteratorAggregate;
+use JsonSerializable;
 use SnipForm\Http\HttpClient;
 use SnipForm\Http\Response;
 use Traversable;
@@ -22,7 +23,7 @@ use Traversable;
  * Pass `payloadPath` for endpoints that nest the paginator under a key —
  * e.g. `'sessions'` for an endpoint returning `{sessions: {data: [...]}}`.
  */
-class PaginatedCollection implements Countable, IteratorAggregate
+class PaginatedCollection implements Countable, IteratorAggregate, JsonSerializable
 {
     private ?int $total = null;
 
@@ -96,6 +97,28 @@ class PaginatedCollection implements Countable, IteratorAggregate
         $body = $this->pageBody($this->fetchPage(1));
 
         return $this->total = (int) ($body['total'] ?? 0);
+    }
+
+    /**
+     * Serialize as Laravel's pagination JSON shape — `data` is page 1 of
+     * items (hydrated via the factory unless `asRaw` is set), plus the
+     * paginator meta (`current_page`, `last_page`, `total`, `next_page_url`,
+     * …). Lets a Laravel controller `return $client->signals()->sessions();`
+     * directly without iterating.
+     *
+     * Only page 1 is serialized. Iterating the collection and *then*
+     * returning it does NOT preserve walked state — a fresh page-1 fetch
+     * happens on serialize.
+     */
+    public function jsonSerialize(): array
+    {
+        $body = $this->pageBody($this->fetchPage(1));
+        $rows = (array) ($body['data'] ?? []);
+        $body['data'] = $this->asRaw
+            ? $rows
+            : array_map(fn ($r) => ($this->factory)($r), $rows);
+
+        return $body;
     }
 
     private function fetchPage(int $page): Response
