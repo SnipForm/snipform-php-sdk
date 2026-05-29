@@ -45,7 +45,9 @@ echo "Sessions: {$metrics->sessions}, bounce: {$metrics->bounceRate}%";
 - [Short links](#short-links)
 - [Session actions](#session-actions)
 - [Conversions](#conversions)
+- [Attribution](#attribution)
 - [`asRaw()` — opt-out of typed objects](#asraw--opt-out-of-typed-objects)
+- [Laravel helpers](#laravel-helpers)
 - [Authentication](#authentication)
 - [Error handling](#error-handling)
 - [Configuration](#configuration)
@@ -591,6 +593,57 @@ $step = $reader->sessionsAt($stepId, page: 1, perPage: 25);
 
 Window setters: `->between($fromTs, $toTs)` or `->since($fromTs)` (open-ended to now). Both take unix timestamps.
 
+## Attribution
+
+`$client->attribution()` exposes the SnipForm channel-attribution engine for diagnostics — useful for "Test attribution" buttons in a link builder UI, or for verifying that a campaign's UTM combo will land in the channel category you expect.
+
+```php
+// By explicit UTM keys
+$result = $client->attribution()->preview([
+    'utm_source'   => 'whatsapp',
+    'utm_medium'   => 'social',
+    'utm_campaign' => 'spring',
+]);
+
+// Or by full URL — SDK parses the query string
+$result = $client->attribution()->preview([
+    'url' => 'https://example.com/landing?utm_source=tg&utm_medium=messaging&utm_campaign=spring',
+]);
+
+$result->category;       // 'messaging'
+$result->categoryLabel;  // 'Messaging'
+$result->name;           // 'WhatsApp' | 'Telegram' | ...
+$result->source;         // 'whatsapp'
+$result->medium;         // 'social'
+$result->method;         // 'utm' | 'click_id' | 'referrer' | 'direct' | 'custom_rule'
+$result->isDirect();     // bool
+$result->isPaid();       // bool — true for paid_search / paid_social / etc.
+```
+
+The engine runs the same code path that classifies real tracker sessions, so a positive preview is contractual: if the engine says `messaging/WhatsApp` now, a visitor landing with those tags in production will be classified the same way.
+
+### Click IDs + referrer
+
+Both can be passed when you want to simulate something beyond bare UTMs — e.g. checking that a `gclid` lands in `paid_search` even if the merchant forgot to set `utm_medium=cpc`:
+
+```php
+$client->attribution()->preview([
+    'click_ids' => ['gclid' => 'xyz123'],
+    'referrer'  => 'https://www.google.com/search?q=...',
+]);
+```
+
+### Preset catalog
+
+`presets()` returns the canonical chip catalog the SnipForm app's link builder uses. Render the chip strip in your own link-creation UX so the UTM taxonomy stays consistent between SnipForm and your app:
+
+```php
+foreach ($client->attribution()->presets() as $preset) {
+    // ['group' => 'Messaging', 'key' => 'whatsapp', 'label' => 'WhatsApp',
+    //  'utm_source' => 'whatsapp', 'utm_medium' => 'messaging']
+}
+```
+
 ## `asRaw()` — opt-out of typed objects
 
 Every resource (and every builder chain) supports `->asRaw()`. Terminals return the underlying API array instead of hydrating a typed DTO. Useful when you want fields the SDK doesn't surface, or when you're forwarding API responses to a frontend that already expects the SnipForm JSON shape.
@@ -621,6 +674,78 @@ $client->conversions()->asRaw()->for($id)                 // ConversionAnalytics
 ```
 
 Each `$client->resource()` call returns a fresh instance, so flipping `asRaw` on one chain doesn't affect the next.
+
+## Laravel helpers
+
+Optional, opt-in glue that ships in `SnipForm\Laravel\*`. The SDK doesn't depend on Laravel — these classes only load when `illuminate/support` is installed (i.e. you're inside a Laravel app). Composer's package discovery handles registration; no manual config needed.
+
+### Service provider — bind `Client` to the container
+
+Add SnipForm config under `config/services.php`:
+
+```php
+'snipform' => [
+    'token'       => env('SNIPFORM_TOKEN'),
+    'base_url'    => env('SNIPFORM_BASE_URL'),        // optional
+    'path_prefix' => env('SNIPFORM_PATH_PREFIX'),     // optional
+    'timeout'     => env('SNIPFORM_TIMEOUT', 30),     // optional
+    'verify_ssl'  => env('SNIPFORM_VERIFY_SSL', true),// optional
+],
+```
+
+Then inject anywhere:
+
+```php
+public function dashboard(\SnipForm\Client $snipform)
+{
+    return $snipform->signals()->last7Days()->metrics();
+}
+```
+
+To skip the auto-registered provider (e.g. you need a custom factory), add to your app's `composer.json`:
+
+```json
+"extra": { "laravel": { "dont-discover": ["snipform/php-sdk"] } }
+```
+
+### Middleware — `SnipFormSessionMiddleware`
+
+Lifts the visitor's session id off the request and stashes it on `$request->attributes` so controllers don't have to re-resolve it. Pulls from, in priority order:
+
+1. `X-SnipForm-Session-Id` header (set by `signals.js` `attachToFetch()`)
+2. `snip_session_id` form field (set by `attachToForm()`)
+3. `snip_session_id` query string param
+
+Register it on the web/api middleware group in `app/Http/Kernel.php`:
+
+```php
+protected $middlewareGroups = [
+    'web' => [
+        // ...
+        \SnipForm\Laravel\Middleware\SnipFormSessionMiddleware::class,
+    ],
+];
+```
+
+Then in any downstream controller:
+
+```php
+public function checkout(Request $request, \SnipForm\Client $snipform)
+{
+    $sessionId = $request->attributes->get(
+        \SnipForm\Laravel\Middleware\SnipFormSessionMiddleware::ATTRIBUTE,
+    );
+
+    if ($sessionId) {
+        $snipform->session()->event([
+            'session_id' => $sessionId,
+            'name'       => 'checkout_started',
+        ]);
+    }
+}
+```
+
+The Session resource also accepts a Request directly — `$snipform->session()->event($request, [...])` — and pulls the same fields. The middleware is purely a convenience for the "I want the id but don't need the SDK yet" case (analytics-only handlers, presence checks, conditional logging).
 
 ## Authentication
 

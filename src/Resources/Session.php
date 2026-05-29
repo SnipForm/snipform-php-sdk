@@ -28,9 +28,14 @@ class Session
 {
     use RawAware;
 
-    private const SESSION_HEADER = 'X-SnipForm-Session-Id';
+    /**
+     * Canonical header + form-field names where the JS tracker stashes
+     * the visitor's session id. The `Laravel\Middleware\SnipFormSessionMiddleware`
+     * reads these too — keep them in lockstep.
+     */
+    public const SESSION_HEADER = 'X-SnipForm-Session-Id';
 
-    private const SESSION_FORM_FIELD = 'snip_session_id';
+    public const SESSION_FORM_FIELD = 'snip_session_id';
 
     public function __construct(private readonly HttpClient $http) {}
 

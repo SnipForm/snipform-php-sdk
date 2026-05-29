@@ -3,6 +3,7 @@
 namespace SnipForm;
 
 use SnipForm\Http\HttpClient;
+use SnipForm\Resources\Attribution;
 use SnipForm\Resources\Clicks;
 use SnipForm\Resources\Conversions;
 use SnipForm\Resources\LinkGroups;
@@ -64,5 +65,10 @@ class Client
     public function conversions(): Conversions
     {
         return new Conversions($this->http);
+    }
+
+    public function attribution(): Attribution
+    {
+        return new Attribution($this->http);
     }
 }
