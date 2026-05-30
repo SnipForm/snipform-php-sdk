@@ -47,7 +47,12 @@ echo "Sessions: {$metrics->sessions}, bounce: {$metrics->bounceRate}%";
 - [Conversions](#conversions)
 - [Attribution](#attribution)
 - [`asRaw()` — opt-out of typed objects](#asraw--opt-out-of-typed-objects)
-- [Laravel helpers](#laravel-helpers)
+- [Laravel](#laravel)
+  - [Auto-identify on login](#auto-identify-on-login)
+  - [`Snipform` facade](#snipform-facade)
+  - [Identify middleware (SPAs / token APIs)](#identify-middleware-spas--token-apis)
+  - [Manual setup — `Client` injection](#manual-setup--client-injection)
+  - [`SnipFormSessionMiddleware`](#snipformsessionmiddleware)
 - [Authentication](#authentication)
 - [Error handling](#error-handling)
 - [Configuration](#configuration)
@@ -675,25 +680,146 @@ $client->conversions()->asRaw()->for($id)                 // ConversionAnalytics
 
 Each `$client->resource()` call returns a fresh instance, so flipping `asRaw` on one chain doesn't affect the next.
 
-## Laravel helpers
+## Laravel
 
-Optional, opt-in glue that ships in `SnipForm\Laravel\*`. The SDK doesn't depend on Laravel — these classes only load when `illuminate/support` is installed (i.e. you're inside a Laravel app). Composer's package discovery handles registration; no manual config needed.
+Optional Laravel layer that ships in `SnipForm\Laravel\*`. The SDK doesn't depend on Laravel — these classes only load when `illuminate/support` is installed. Composer's package discovery wires the provider; everything is opt-in via config.
 
-### Service provider — bind `Client` to the container
+### Auto-identify on login
 
-Add SnipForm config under `config/services.php`:
+The happy path: every time a user logs into your app, attach their session to a SnipForm `Contact` automatically. No code at the callsite.
 
-```php
-'snipform' => [
-    'token'       => env('SNIPFORM_TOKEN'),
-    'base_url'    => env('SNIPFORM_BASE_URL'),        // optional
-    'path_prefix' => env('SNIPFORM_PATH_PREFIX'),     // optional
-    'timeout'     => env('SNIPFORM_TIMEOUT', 30),     // optional
-    'verify_ssl'  => env('SNIPFORM_VERIFY_SSL', true),// optional
-],
+**1. Set the token in `.env`:**
+
+```
+SNIPFORM_TOKEN=snipform_pat_xxx
 ```
 
-Then inject anywhere:
+**2. Add the `Identifiable` trait to your User model:**
+
+```php
+use Illuminate\Foundation\Auth\User as Authenticatable;
+use SnipForm\Laravel\Concerns\Identifiable;
+
+class User extends Authenticatable
+{
+    use Identifiable;
+}
+```
+
+That's it. The provider registers a listener on `Illuminate\Auth\Events\Login` and fires identify against `Snipform` whenever a user authenticates.
+
+**What gets sent.** `Identifiable` auto-derives the payload by probing common columns:
+
+| Where | Columns checked |
+|---|---|
+| `external_id` | `$user->getKey()` |
+| `email` (top level) | `email` |
+| `traits.*` | `first_name`, `last_name`, `phone`, `company`, `job_title`, `website`, `country`, `city` |
+| `traits.first_name` / `traits.last_name` (fallback) | `name` split on whitespace |
+
+Override what's sent by adding hooks to your model:
+
+```php
+class User extends Authenticatable
+{
+    use Identifiable;
+
+    // Custom external id — defaults to $this->getKey()
+    protected function snipformExternalId(): string
+    {
+        return 'usr_'.$this->uuid;
+    }
+
+    // Merged on top of the auto-derived traits
+    protected function snipformTraits(): array
+    {
+        return [
+            'company' => $this->team?->name,
+            'meta'    => [
+                ['key' => 'plan', 'value' => $this->subscription_plan],
+            ],
+        ];
+    }
+}
+```
+
+**Performance — three layers of "don't overburden the API":**
+
+1. **`afterResponse` queueing.** The identify call runs after Laravel sends the response. Login is never blocked.
+2. **Cache-backed dedup.** The provider wires Laravel's default cache as an atomic gate via `Cache::add`. The first request per `(user, payload)` per TTL goes over the wire; the rest are no-ops.
+3. **Server-side idempotency.** Even if you bypass the dedup, the SnipForm API merges traits in place — repeat calls with the same payload are a no-op database read.
+
+**Config knobs** (all `.env`-driven):
+
+```
+SNIPFORM_IDENTIFY_ON_LOGIN=true       # default — auto-listen on Login event
+SNIPFORM_IDENTIFY_QUEUE=true          # default — fire after response is sent
+SNIPFORM_IDENTIFY_DEDUP_TTL=86400     # default — 24h; 0 disables dedup
+SNIPFORM_IDENTIFY_CACHE_STORE=redis   # optional — named cache store override
+```
+
+Full control over the rest by publishing the config file:
+
+```bash
+php artisan vendor:publish --tag=snipform-config
+```
+
+### `Snipform` facade
+
+Explicit identify calls — useful for paths the `Login` event doesn't cover (impersonation, webhook handlers, side flows):
+
+```php
+use SnipForm\Laravel\Facades\Snipform;
+
+Snipform::auth();                       // identify auth()->user(), no-op for guests
+Snipform::user($someOtherUser);         // identify any model with the Identifiable trait
+Snipform::payload([                     // raw passthrough — bypass the trait
+    'email'  => 'jane@acme.com',
+    'traits' => ['first_name' => 'Jane'],
+]);
+
+Snipform::contacts()->find($id);        // SDK Contacts resource — find/update/delete/all
+Snipform::contacts()->update($id, [
+    'lifecycle_stage' => 'customer',
+]);
+
+Snipform::client();                     // escape hatch — full SDK Client
+```
+
+All `identify` calls honor the same dedup + queue config — `Snipform::auth()` called a hundred times in the same hour costs you one API call.
+
+To register the `Snipform` alias globally (so you don't have to `use` it everywhere), add to `config/app.php`:
+
+```php
+'aliases' => Facade::defaultAliases()->merge([
+    'Snipform' => \SnipForm\Laravel\Facades\Snipform::class,
+])->toArray(),
+```
+
+### Identify middleware (SPAs / token APIs)
+
+Some apps don't go through the form login flow — token-auth APIs (`auth:sanctum`, `auth:api`), SPAs that maintain a session via Sanctum's stateful cookie, etc. The `Login` event never fires in those cases.
+
+The `snipform.identify` middleware (alias registered by the provider) runs identify against the auth user on every request it's applied to. Cheap to use because the dedup gate short-circuits repeats:
+
+```php
+Route::middleware(['auth:sanctum', 'snipform.identify'])->group(function () {
+    Route::get('/me', UserController::class);
+    Route::get('/dashboard', DashboardController::class);
+});
+```
+
+Per-request cost when the cache is warm: one cache hit. When the cache misses: one identify call, deferred until after the response is sent.
+
+To target a non-default guard:
+
+```php
+Route::middleware('snipform.identify:web')->group(...);
+```
+
+### Manual setup — `Client` injection
+
+If you'd rather skip the Laravel layer and reach for the raw SDK, the `Client` is still bound as a singleton:
 
 ```php
 public function dashboard(\SnipForm\Client $snipform)
@@ -702,21 +828,25 @@ public function dashboard(\SnipForm\Client $snipform)
 }
 ```
 
-To skip the auto-registered provider (e.g. you need a custom factory), add to your app's `composer.json`:
+Config also reads from the legacy `config/services.php → snipform` location for back-compat — apps that wired the SDK before the Laravel layer existed keep working untouched.
+
+To opt out of the auto-registered provider entirely, add to your app's `composer.json`:
 
 ```json
 "extra": { "laravel": { "dont-discover": ["snipform/php-sdk"] } }
 ```
 
-### Middleware — `SnipFormSessionMiddleware`
+### `SnipFormSessionMiddleware`
 
-Lifts the visitor's session id off the request and stashes it on `$request->attributes` so controllers don't have to re-resolve it. Pulls from, in priority order:
+Older / lighter helper that just lifts the visitor's session id off the inbound request and stashes it on `$request->attributes`. Use it when you want the id without invoking the SDK on every request (analytics-only handlers, presence checks, conditional logging).
+
+Pulls from, in priority order:
 
 1. `X-SnipForm-Session-Id` header (set by `signals.js` `attachToFetch()`)
 2. `snip_session_id` form field (set by `attachToForm()`)
 3. `snip_session_id` query string param
 
-Register it on the web/api middleware group in `app/Http/Kernel.php`:
+Register on the web/api middleware group:
 
 ```php
 protected $middlewareGroups = [
@@ -745,7 +875,7 @@ public function checkout(Request $request, \SnipForm\Client $snipform)
 }
 ```
 
-The Session resource also accepts a Request directly — `$snipform->session()->event($request, [...])` — and pulls the same fields. The middleware is purely a convenience for the "I want the id but don't need the SDK yet" case (analytics-only handlers, presence checks, conditional logging).
+The Session resource also accepts a Request directly — `$snipform->session()->event($request, [...])` — and pulls the same fields. The middleware is purely a convenience for the "I want the id but don't need the SDK yet" case.
 
 ## Authentication
 

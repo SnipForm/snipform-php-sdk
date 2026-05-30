@@ -28,7 +28,10 @@
         "laravel": {
             "providers": [
                 "SnipForm\\Laravel\\SnipFormServiceProvider"
-            ]
+            ],
+            "aliases": {
+                "Snipform": "SnipForm\\Laravel\\Facades\\Snipform"
+            }
         }
     },
     "autoload": {
