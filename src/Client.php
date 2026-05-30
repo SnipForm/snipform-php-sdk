@@ -33,7 +33,7 @@ class Client
      */
     private ?Closure $identifyDedup = null;
 
-    private int $identifyDedupTtl = 86400; // 24h default
+    private int $identifyDedupTtl = 3600; // 1h default
 
     public function __construct(string $token, array $options = [])
     {
@@ -63,7 +63,7 @@ class Client
      * The closure receives `($fingerprintKey, $ttl)` and must return TRUE when
      * the key is NEW (i.e. should fire), FALSE when it's already cached.
      *
-     * Optional `$ttl` overrides the default (24h). The closure is invoked
+     * Optional `$ttl` overrides the default (1h). The closure is invoked
      * with this TTL on every call so a long-lived client can change it via
      * config without reconstructing.
      */

@@ -43,9 +43,9 @@ return [
         'queue' => env('SNIPFORM_IDENTIFY_QUEUE', true),
 
         // Dedup TTL (seconds). 0 = no dedup; every call hits the API.
-        // Default 24h — first request after a user changes their email
+        // Default 1h — first request after a user changes their email
         // refreshes the fingerprint and goes through.
-        'dedup_ttl' => env('SNIPFORM_IDENTIFY_DEDUP_TTL', 86400),
+        'dedup_ttl' => env('SNIPFORM_IDENTIFY_DEDUP_TTL', 3600),
 
         // Named cache store for the dedup. Defaults to the app's default
         // store. Set to `redis` / `memcached` if you want isolation.

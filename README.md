@@ -754,7 +754,7 @@ class User extends Authenticatable
 ```
 SNIPFORM_IDENTIFY_ON_LOGIN=true       # default — auto-listen on Login event
 SNIPFORM_IDENTIFY_QUEUE=true          # default — fire after response is sent
-SNIPFORM_IDENTIFY_DEDUP_TTL=86400     # default — 24h; 0 disables dedup
+SNIPFORM_IDENTIFY_DEDUP_TTL=3600      # default — 1h; 0 disables dedup
 SNIPFORM_IDENTIFY_CACHE_STORE=redis   # optional — named cache store override
 ```
 

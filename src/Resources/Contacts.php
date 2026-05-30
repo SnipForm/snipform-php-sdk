@@ -47,7 +47,7 @@ class Contacts
     public function __construct(
         private readonly HttpClient $http,
         private readonly ?Closure $identifyDedup = null,
-        private readonly int $identifyDedupTtl = 86400,
+        private readonly int $identifyDedupTtl = 3600,
     ) {}
 
     // ======================================================================
