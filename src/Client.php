@@ -43,6 +43,8 @@ class Client
             timeout: $options['timeout'] ?? 30,
             pathPrefix: $options['path_prefix'] ?? '/v2/',
             verifySsl: $options['verify_ssl'] ?? true,
+            // @internal - tests pass a Guzzle MockHandler; not a public option.
+            handler: $options['handler'] ?? null,
         );
     }
 

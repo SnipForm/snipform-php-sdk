@@ -31,10 +31,14 @@ use SnipForm\Http\HttpClient;
  *   $client->contacts()->update($id, ['first_name' => 'Jane D']);
  *   $client->contacts()->delete($id);                             // GDPR hard delete
  *
- * For identify, the session can come from any of:
- *   1. `session_id`            in the payload
- *   2. `X-Snipform-Session-Id` header (set on the underlying HttpClient by the caller)
- *   3. `ip` + `user_agent`     in the payload — fingerprint-resolved server-side
+ * For identify, the session id comes from either:
+ *   1. `session_id` in the payload (explicit), or
+ *   2. `X-Snipform-Session-Id` header (extracted from a Request — set by the
+ *      JS tracker's `attachToFetch()`)
+ *
+ * If neither resolves, the Contact still gets created / updated — it just
+ * isn't linked to a SignalSession. Server-side fingerprint resolution was
+ * removed because customer-side IP detection isn't reliable to trust.
  *
  * Append `->asRaw()` anywhere on the chain to skip DTO hydration.
  */
@@ -152,11 +156,8 @@ class Contacts
      */
     public function identifyOnce(array $payload): bool
     {
-        if ($this->identifyDedup && ($key = $this->fingerprint($payload)) !== null) {
-            $isNew = (bool) ($this->identifyDedup)($key, $this->identifyDedupTtl);
-            if (! $isNew) {
-                return false;
-            }
+        if (! $this->passesDedup($payload)) {
+            return false;
         }
 
         $this->http->post(self::PATH.'/identify', $payload);
@@ -165,11 +166,31 @@ class Contacts
     }
 
     /**
-     * Pull `X-Snipform-Session-Id`, client IP, and User-Agent off an inbound
-     * Laravel / Symfony / PSR-7 request and call `identifyOnce()` with them
-     * merged in. The browser-side tracker auto-attaches the session-id
-     * header to same-origin fetch/XHR via `signals.attachToFetch()`, so this
-     * gives you a one-liner inside any authenticated controller / middleware:
+     * Run the dedup gate without firing. TRUE = this payload is new (the
+     * caller should send it), FALSE = already seen within the TTL. Without a
+     * gate wired on the Client every payload passes. Consumes the gate: a
+     * TRUE answer marks the fingerprint as seen.
+     */
+    public function passesDedup(array $payload): bool
+    {
+        if (! $this->identifyDedup) {
+            return true;
+        }
+
+        $key = $this->fingerprint($payload);
+        if ($key === null) {
+            return true;
+        }
+
+        return (bool) ($this->identifyDedup)($key, $this->identifyDedupTtl);
+    }
+
+    /**
+     * Pull `X-Snipform-Session-Id` off an inbound Laravel / Symfony / PSR-7
+     * request and call `identifyOnce()` with it merged in. The browser-side
+     * tracker auto-attaches that header to same-origin fetch/XHR via
+     * `signals.attachToFetch()`, so this is a one-liner inside any
+     * authenticated controller / middleware:
      *
      *   public function login(Request $request, \SnipForm\Client $sf)
      *   {
@@ -185,24 +206,16 @@ class Contacts
      *       ]);
      *   }
      *
-     * Wire dedup on the Client (one liner in a service provider) and the
-     * same auth'd user firing this endpoint a hundred times only hits the
-     * SnipForm API once per cache TTL — or again immediately if their
-     * traits change.
+     * For Laravel apps using the `@snipformHydrate` directive, the
+     * `IdentifyManager` (the `Snipform` facade root) reads the session
+     * id from the Laravel session via the Request macro instead — works
+     * across redirects without the header having to ride along.
      */
     public function identifyFromRequest(object $request, array $payload): bool
     {
         $sessionId = $this->extractHeader($request, 'X-Snipform-Session-Id');
         if ($sessionId !== null && ! isset($payload['session_id'])) {
             $payload['session_id'] = $sessionId;
-        }
-
-        if (! isset($payload['ip']) && ($ip = $this->extractIp($request)) !== null) {
-            $payload['ip'] = $ip;
-        }
-
-        if (! isset($payload['user_agent']) && ($ua = $this->extractHeader($request, 'User-Agent')) !== null) {
-            $payload['user_agent'] = $ua;
         }
 
         return $this->identifyOnce($payload);
@@ -299,31 +312,6 @@ class Contacts
             $value = $r->getHeaderLine($name);
             if (is_string($value) && $value !== '') {
                 return $value;
-            }
-        }
-
-        return null;
-    }
-
-    private function extractIp(object $r): ?string
-    {
-        if (method_exists($r, 'ip')) {
-            $ip = $r->ip();              // Laravel
-            if (is_string($ip) && $ip !== '') {
-                return $ip;
-            }
-        }
-        if (method_exists($r, 'getClientIp')) {
-            $ip = $r->getClientIp();     // Symfony
-            if (is_string($ip) && $ip !== '') {
-                return $ip;
-            }
-        }
-        if (method_exists($r, 'getServerParams')) {
-            $params = $r->getServerParams();  // PSR-7
-            $ip = $params['REMOTE_ADDR'] ?? null;
-            if (is_string($ip) && $ip !== '') {
-                return $ip;
             }
         }
 

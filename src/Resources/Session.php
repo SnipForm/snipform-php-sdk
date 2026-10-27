@@ -5,69 +5,54 @@ namespace SnipForm\Resources;
 use InvalidArgumentException;
 use SnipForm\Concerns\RawAware;
 use SnipForm\Data\Event;
-use SnipForm\Data\ResolveResult;
 use SnipForm\Exceptions\MissingSessionIdException;
 use SnipForm\Http\HttpClient;
 use Symfony\Component\HttpFoundation\Request;
 
 /**
- * Session-scoped actions: resolve a visitor's session by fingerprint, submit
- * a custom event, patch acquisition metadata.
+ * Session-scoped writes: submit a custom event, patch acquisition metadata.
  *
- * Two ways to identify which session to act on:
+ * Two ways to say which session to act on:
  *
  *   A) Explicit `session_id` in the payload (always works):
  *      $client->session()->event(['session_id' => $id, 'name' => 'purchase']);
  *
- *   B) Pass the incoming Request — the SDK pulls session_id from the
- *      X-SnipForm-Session-Id header or the snip_session_id form field that
- *      signals.js sets via attachToFetch() / attachToForms():
+ *   B) Pass the incoming Request - the SDK resolves the id through every
+ *      transport the browser side can use (see fromRequest()):
  *      $client->session()->event($request, ['name' => 'purchase']);
+ *
+ * Either way the session id originates client-side: the JS tracker is the
+ * only canonical source. Server-to-server fingerprint resolution was removed
+ * - too dependent on the customer's IP-detection chain to trust.
+ *
+ * Laravel apps get the same thing with less ceremony through the facade:
+ * `Snipform::event('purchase', 9900)` resolves the session id itself.
  */
 class Session
 {
     use RawAware;
 
     /**
-     * Canonical header + form-field names where the JS tracker stashes
-     * the visitor's session id. The `Laravel\Middleware\SnipFormSessionMiddleware`
-     * reads these too — keep them in lockstep.
+     * Canonical transports the JS tracker + the Laravel hydrate loader use
+     * to hand the visitor's session id to the backend. The Laravel layer
+     * reads these too - keep them in lockstep.
      */
     public const SESSION_HEADER = 'X-SnipForm-Session-Id';
 
     public const SESSION_FORM_FIELD = 'snip_session_id';
 
+    /** Server-session key the hydrate loader / bind endpoint stash the id under. */
+    public const SESSION_STASH_KEY = 'snipform_session_id';
+
     public function __construct(private readonly HttpClient $http) {}
 
     // ======================================================================
-    // Resolve — derive session_id from a visitor's fingerprint
-    // ======================================================================
-
-    /**
-     * Look up the visitor's SignalSession by their fingerprint. Accepts a
-     * Symfony/Laravel Request (ip / UA / lang extracted automatically) or
-     * a plain array with those keys.
-     *
-     * @param  Request|array{ip: string, user_agent: string, lang?: string}  $input
-     */
-    public function resolve(Request|array $input): ResolveResult|array
-    {
-        $payload = $input instanceof Request
-            ? $this->extractFromRequest($input)
-            : $this->validateArrayInput($input);
-
-        $row = (array) $this->http->post('property/session/resolve', $payload)->data();
-
-        return $this->hydrate($row, ResolveResult::fromArray(...));
-    }
-
-    // ======================================================================
-    // Event — submit a custom event
+    // Event - submit a custom event
     // ======================================================================
 
     /**
      * Submit a custom event for a session. Pass either:
-     *   - a Request (SDK extracts session_id from X-SnipForm-Session-Id or snip_session_id), or
+     *   - a Request (the SDK resolves session_id from it), or
      *   - just the attributes array with an explicit session_id key.
      *
      * @param  Request|array  $requestOrAttributes  Symfony/Laravel Request, or attributes array if calling shorthand
@@ -84,17 +69,17 @@ class Session
     }
 
     // ======================================================================
-    // Acquisition — patch acquisition meta onto a session
+    // Acquisition - patch acquisition meta onto a session
     // ======================================================================
 
     /**
-     * Patch acquisition metadata. Same signature shape as event() — pass a
+     * Patch acquisition metadata. Same signature shape as event() - pass a
      * Request to auto-attach session_id, or pass attributes with an explicit
-     * session_id.
+     * session_id. Money is in integer CENTS.
      *
      * @param  array{cost?: int, value?: int, currency_code?: string, tags?: array<string>}|null  $attributes
+     * @return array{id: string, acquisition_meta: array, value: array|null}
      *
-     * @return array{id: string, acquisition_meta: array}
      * @throws MissingSessionIdException
      */
     public function acquisition(Request|array $requestOrAttributes, ?array $attributes = null): array
@@ -107,20 +92,29 @@ class Session
     }
 
     // ======================================================================
-    // Public helper — pull session_id from a Request (or return null)
+    // Public helper - pull session_id from a Request (or return null)
     // ======================================================================
 
     /**
-     * Extract a SnipForm session_id from a Symfony/Laravel Request:
-     *   1. X-SnipForm-Session-Id header (attached by signals.js attachToFetch)
-     *   2. snip_session_id body/form field (attached by attachToForms)
+     * Resolve a SnipForm session_id from a Symfony/Laravel Request. Priority:
      *
-     * Returns null if neither is present. Use this when you want to decide
-     * yourself how to handle the no-session case, instead of letting
+     *   1. Server session - stashed by the Laravel hydrate loader (cookie or
+     *      POST mode) on a prior request; survives redirects and form posts
+     *   2. X-SnipForm-Session-Id header - attached by signals.js attachToFetch()
+     *   3. snip_session_id form field - attached by attachToForm()
+     *   4. snip_session_id query string - appended by hand
+     *
+     * Returns null if nothing resolves. Use it when you want to decide
+     * yourself how to handle the no-session case instead of letting
      * event()/acquisition() throw.
      */
     public function fromRequest(Request $request): ?string
     {
+        $stashed = self::stashedSessionId($request);
+        if ($stashed !== null) {
+            return $stashed;
+        }
+
         $headerValue = $request->headers->get(self::SESSION_HEADER);
         if ($headerValue) {
             return $headerValue;
@@ -130,6 +124,22 @@ class Session
             ?? $request->query->get(self::SESSION_FORM_FIELD);
 
         return $formValue ?: null;
+    }
+
+    /**
+     * Tier 1 on its own: the id the hydrate loader stashed in the server
+     * session, if a session is attached and holds one. Works for Symfony
+     * sessions and Laravel's store alike (both expose get()).
+     */
+    public static function stashedSessionId(Request $request): ?string
+    {
+        if (! $request->hasSession()) {
+            return null;
+        }
+
+        $value = $request->getSession()->get(self::SESSION_STASH_KEY);
+
+        return is_string($value) && $value !== '' ? $value : null;
     }
 
     // ======================================================================
@@ -150,37 +160,13 @@ class Session
             return ['session_id' => $sessionId, ...$attributes];
         }
 
-        // Array shorthand — expects session_id key inside.
+        // Array shorthand - expects session_id key inside.
         if (empty($requestOrAttributes['session_id'])) {
             throw new MissingSessionIdException(
-                'session_id is required — either include it in the attributes array or pass a Request as the first argument.',
+                'session_id is required - either include it in the attributes array or pass a Request as the first argument.',
             );
         }
 
         return $requestOrAttributes;
-    }
-
-    private function extractFromRequest(Request $request): array
-    {
-        return [
-            'ip' => $request->getClientIp() ?? '',
-            'user_agent' => (string) ($request->headers->get('User-Agent') ?? ''),
-            'lang' => (string) ($request->headers->get('Accept-Language') ?? ''),
-        ];
-    }
-
-    private function validateArrayInput(array $input): array
-    {
-        if (empty($input['ip']) || empty($input['user_agent'])) {
-            throw new InvalidArgumentException(
-                'resolve() requires `ip` and `user_agent` — pass a Symfony/Laravel Request or an array with those keys',
-            );
-        }
-
-        return [
-            'ip' => (string) $input['ip'],
-            'user_agent' => (string) $input['user_agent'],
-            'lang' => (string) ($input['lang'] ?? ''),
-        ];
     }
 }

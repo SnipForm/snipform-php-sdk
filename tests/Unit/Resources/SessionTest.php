@@ -11,9 +11,9 @@ use SnipForm\Resources\Session;
 use Symfony\Component\HttpFoundation\Request;
 
 /**
- * Verify the Session resource extracts visitor fingerprint values correctly
- * from a Symfony/Laravel Request and validates plain-array inputs. No HTTP
- * fires — we invoke the private extractor / validator directly.
+ * Verify the Session resource extracts session_id correctly from a Request
+ * (header → form → query) and composes outbound payloads. No HTTP fires —
+ * we invoke the public / private methods directly.
  */
 class SessionTest extends TestCase
 {
@@ -28,82 +28,6 @@ class SessionTest extends TestCase
         $m = $ref->getMethod($method);
 
         return $m->invoke($session, ...$args);
-    }
-
-    public function test_extracts_ip_ua_lang_from_symfony_request(): void
-    {
-        $request = Request::create('/path', 'POST', server: [
-            'REMOTE_ADDR' => '203.0.113.42',
-            'HTTP_USER_AGENT' => 'Mozilla/5.0 (Test)',
-            'HTTP_ACCEPT_LANGUAGE' => 'en-US,en;q=0.9',
-        ]);
-
-        $payload = $this->call($this->session(), 'extractFromRequest', $request);
-
-        $this->assertSame('203.0.113.42', $payload['ip']);
-        $this->assertSame('Mozilla/5.0 (Test)', $payload['user_agent']);
-        $this->assertSame('en-US,en;q=0.9', $payload['lang']);
-    }
-
-    public function test_payload_keys_always_present_for_request_input(): void
-    {
-        // Symfony's Request::create() sets some HTTP defaults of its own
-        // (e.g. HTTP_USER_AGENT = 'Symfony') — the test that matters is the
-        // SDK always emits ip/user_agent/lang keys, never nulls.
-        $request = Request::create('/path', 'POST', server: ['REMOTE_ADDR' => '203.0.113.42']);
-
-        $payload = $this->call($this->session(), 'extractFromRequest', $request);
-
-        $this->assertArrayHasKey('ip', $payload);
-        $this->assertArrayHasKey('user_agent', $payload);
-        $this->assertArrayHasKey('lang', $payload);
-        $this->assertSame('203.0.113.42', $payload['ip']);
-        $this->assertIsString($payload['user_agent']);
-        $this->assertIsString($payload['lang']);
-    }
-
-    public function test_validates_array_input_passes_through(): void
-    {
-        $payload = $this->call($this->session(), 'validateArrayInput', [
-            'ip' => '1.2.3.4',
-            'user_agent' => 'curl/8.0',
-            'lang' => 'fr',
-        ]);
-
-        $this->assertSame([
-            'ip' => '1.2.3.4',
-            'user_agent' => 'curl/8.0',
-            'lang' => 'fr',
-        ], $payload);
-    }
-
-    public function test_validates_array_input_defaults_lang(): void
-    {
-        $payload = $this->call($this->session(), 'validateArrayInput', [
-            'ip' => '1.2.3.4',
-            'user_agent' => 'curl/8.0',
-        ]);
-
-        $this->assertSame('', $payload['lang']);
-    }
-
-    public function test_validates_array_input_throws_when_ip_missing(): void
-    {
-        $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage('resolve() requires `ip` and `user_agent`');
-
-        $this->call($this->session(), 'validateArrayInput', [
-            'user_agent' => 'curl/8.0',
-        ]);
-    }
-
-    public function test_validates_array_input_throws_when_ua_missing(): void
-    {
-        $this->expectException(InvalidArgumentException::class);
-
-        $this->call($this->session(), 'validateArrayInput', [
-            'ip' => '1.2.3.4',
-        ]);
     }
 
     // ----------------------------------------------------------------------

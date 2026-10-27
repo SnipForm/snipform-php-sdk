@@ -4,9 +4,11 @@ namespace SnipForm\Http;
 
 use GuzzleHttp\Client as Guzzle;
 use GuzzleHttp\Exception\GuzzleException;
+use GuzzleHttp\HandlerStack;
 use SnipForm\Exceptions\ApiException;
 use SnipForm\Exceptions\AuthenticationException;
 use SnipForm\Exceptions\SnipFormException;
+use SnipForm\SnipForm;
 
 /**
  * Internal HTTP client. Owns the Guzzle instance, applies bearer auth, and
@@ -16,39 +18,49 @@ class HttpClient
 {
     private Guzzle $guzzle;
 
+    /**
+     * @param  callable|null  $handler  Guzzle handler override - tests inject a
+     *                                  MockHandler here so no request leaves the box.
+     */
     public function __construct(
         private readonly string $token,
         private readonly string $baseUrl,
         int $timeout = 30,
         string $pathPrefix = '/v2/',
         bool $verifySsl = true,
+        ?callable $handler = null,
     ) {
-        $this->guzzle = new Guzzle([
+        $options = [
             'base_uri' => rtrim($baseUrl, '/').'/'.trim($pathPrefix, '/').'/',
             'timeout' => $timeout,
             'verify' => $verifySsl,
             'headers' => [
                 'Authorization' => 'Bearer '.$this->token,
                 'Accept' => 'application/json',
-                'User-Agent' => 'snipform-php-sdk/0.3',
+                'User-Agent' => 'snipform-php-sdk/'.SnipForm::VERSION,
             ],
             'http_errors' => false,
-        ]);
+        ];
+        if ($handler !== null) {
+            $options['handler'] = HandlerStack::create($handler);
+        }
+
+        $this->guzzle = new Guzzle($options);
     }
 
-    public function get(string $path, array $query = []): Response
+    public function get(string $path, array $query = [], array $headers = []): Response
     {
-        return $this->send('GET', $path, ['query' => $query]);
+        return $this->send('GET', $path, ['query' => $query, 'headers' => $headers]);
     }
 
-    public function post(string $path, array $payload = []): Response
+    public function post(string $path, array $payload = [], array $headers = []): Response
     {
-        return $this->send('POST', $path, ['json' => $payload]);
+        return $this->send('POST', $path, ['json' => $payload, 'headers' => $headers]);
     }
 
-    public function delete(string $path): Response
+    public function delete(string $path, array $headers = []): Response
     {
-        return $this->send('DELETE', $path, []);
+        return $this->send('DELETE', $path, ['headers' => $headers]);
     }
 
     private function send(string $method, string $path, array $options): Response

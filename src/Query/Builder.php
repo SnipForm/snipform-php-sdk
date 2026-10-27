@@ -4,6 +4,7 @@ namespace SnipForm\Query;
 
 use JsonSerializable;
 use SnipForm\Concerns\RawAware;
+use SnipForm\Data\GraphResult;
 use SnipForm\Data\MetricsResult;
 use SnipForm\Exceptions\IncompatibleFieldOperator;
 use SnipForm\Http\HttpClient;
@@ -254,7 +255,8 @@ class Builder implements JsonSerializable
     {
         return SessionCollection::for(
             http: $this->http,
-            payload: $this->buildPayload(['per_page' => $perPage]),
+            // This endpoint names its page size `limit`, not `per_page` - sent as per_page it was ignored and every page held 20.
+            payload: $this->buildPayload(['limit' => $perPage]),
             path: 'property/signals/sessions',
             asRaw: $this->asRaw,
         );
@@ -276,6 +278,54 @@ class Builder implements JsonSerializable
         }
 
         return MetricsResult::fromResponse($response);
+    }
+
+    // ======================================================================
+    // Terminal — analytics graph + live window
+    // ======================================================================
+
+    /**
+     * Time-series for one metric over the chain's period, bucketed by
+     * interval. Metrics: sessions | views | views_session | bounce |
+     * duration | scroll. Interval defaults to whatever fits the period
+     * (hour/day/week/month); `compare` adds the previous period as a
+     * second series.
+     */
+    public function graph(string $metric = 'sessions', ?string $interval = null, bool $compare = false): GraphResult|array
+    {
+        $response = $this->http->post(
+            'property/signals/analytics/graph',
+            $this->buildPayload(array_filter([
+                'metric' => $metric,
+                'interval' => $interval,
+                'compare' => $compare,
+            ], fn ($v) => $v !== null)),
+        );
+
+        if ($this->asRaw) {
+            return (array) $response->data();
+        }
+
+        return GraphResult::fromResponse($response);
+    }
+
+    /**
+     * The live window (what's happening right now), same graph shape.
+     * Period settings on the chain are ignored - live is its own window -
+     * but clauses still apply.
+     */
+    public function live(string $metric = 'sessions'): GraphResult|array
+    {
+        $response = $this->http->post('property/signals/analytics/live', [
+            'metric' => $metric,
+            'clauses' => array_map(fn (Clause $c) => $c->toArray(), $this->clauses),
+        ]);
+
+        if ($this->asRaw) {
+            return (array) $response->data();
+        }
+
+        return GraphResult::fromResponse($response);
     }
 
     /**

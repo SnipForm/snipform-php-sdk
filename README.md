@@ -32,6 +32,16 @@ $metrics = $snipform->signals()
 echo "Sessions: {$metrics->sessions}, bounce: {$metrics->bounceRate}%";
 ```
 
+In Laravel, writes are one line - the SDK resolves the visitor's session id for you:
+
+```php
+use SnipForm\Laravel\Facades\Snipform;
+
+Snipform::event('purchase', 9900, ['order' => $order->id]);   // custom event on the current visitor
+Snipform::revenue(9900, 'USD');                                // acquisition value, in cents
+Snipform::identify($user);                                     // contact, from your User model
+```
+
 ## Contents
 
 - [Data Objects (DTOs)](#data-objects-dtos)
@@ -42,12 +52,16 @@ echo "Sessions: {$metrics->sessions}, bounce: {$metrics->bounceRate}%";
   - [Sessions](#sessions-lazy)
   - [Pages](#pages--explicit-pagination)
   - [Metrics](#metrics)
+  - [Graph + live](#graph--live)
 - [Short links](#short-links)
 - [Session actions](#session-actions)
+- [Contacts](#contacts)
 - [Conversions](#conversions)
 - [Attribution](#attribution)
 - [`asRaw()` — opt-out of typed objects](#asraw--opt-out-of-typed-objects)
 - [Laravel](#laravel)
+  - [Reading the visitor's session id](#reading-the-visitors-session-id)
+  - [Firing events from Laravel](#firing-events-from-laravel)
   - [Auto-identify on login](#auto-identify-on-login)
   - [`Snipform` facade](#snipform-facade)
   - [Identify middleware (SPAs / token APIs)](#identify-middleware-spas--token-apis)
@@ -272,6 +286,29 @@ $m->tookMs;            // server query time
 
 To reach trend data (previous-period, percent, difference), use [`asRaw()`](#asraw--opt-out-of-typed-objects).
 
+### Graph + live
+
+Time-series for one metric over the chain's period, bucketed by interval. Returns a `GraphResult`:
+
+```php
+$g = $snipform->signals()->last28Days()->where('country', 'US')->graph('sessions');
+//                                                            ->graph('bounce', 'day', compare: true)
+
+$g->metric;            // 'sessions'
+$g->metricLabel;       // 'Sessions'
+$g->series;            // GraphPoint[] — current period, one per bucket: ->label, ->value
+$g->previousSeries;    // GraphPoint[] — filled when compare: true
+$g->projectedSeries;   // GraphPoint[] — dotted tail projecting the still-running bucket
+```
+
+Metrics: `sessions`, `views`, `views_session`, `bounce`, `duration`, `scroll`. Interval defaults to whatever fits the period (`hour` / `day` / `week` / `month`).
+
+`live()` is the same shape for the live window - period settings on the chain are ignored, clauses still apply:
+
+```php
+$now = $snipform->signals()->where('device', 'mobile')->live();   // or ->live('views')
+```
+
 ## Short links
 
 Three resources: groups (folders), links (the short URLs themselves), and clicks (the redirect events). Scoped to the property your token belongs to.
@@ -366,115 +403,123 @@ Filters:
 
 ## Session actions
 
-Three writes scoped to a single SignalSession: resolve a visitor's session id from their request, submit a custom event, and patch acquisition metadata.
+Two writes scoped to a single SignalSession: submit a custom event, and patch acquisition metadata. Both need the visitor's **session id** - and that only ever originates in the browser, where the JS tracker resolves it. There is no server-side lookup by IP or user agent (it existed once; it depended on your proxy chain reporting the right IP, which it can't be trusted to do).
 
-### Resolve
+So the id has to travel from the page to your backend. The SDK resolves it from a `Request` through four transports, in priority order:
 
-Looks up the SignalSession that belongs to a visitor — by hashing their IP + User-Agent + language with the same daily salt the JS tracker uses. The visitor must already have been tracked once today on this property for the lookup to find a match.
+1. **Server session** - stashed by the Laravel [hydrate loader](#reading-the-visitors-session-id) on a prior request. Survives redirects, form posts, and AJAX alike.
+2. **`X-SnipForm-Session-Id` header** - attached by the tracker's `signals.attachToFetch()` on same-origin AJAX.
+3. **`snip_session_id` form field** - injected by `signals.attachToForm()` on a classic form post.
+4. **`snip_session_id` query string** - appended by hand.
 
-The SDK accepts a Symfony or Laravel Request and pulls those values for you. Pass `$request` from your controller:
+Or pass `session_id` explicitly - for example the id you stored against an order at checkout, so you can fire `order_shipped` from a queued job days later.
 
-```php
-// Laravel
-public function handleVisitor(Request $request)
-{
-    $resolved = $snipform->session()->resolve($request);
-    // → ResolveResult { resolved: true, sessionId: 'abc...', sid: 'hash...' }
-}
-```
-
-```php
-// Symfony
-public function handle(Request $request): Response
-{
-    $resolved = $snipform->session()->resolve($request);
-}
-```
-
-Or pass values explicitly if you're not on a Symfony-flavoured framework:
-
-```php
-$resolved = $snipform->session()->resolve([
-    'ip'         => $myFramework->getClientIp(),
-    'user_agent' => $myFramework->getUserAgent(),
-    'lang'       => $myFramework->getAcceptLanguage(),
-]);
-```
-
-`$resolved->resolved` is `false` if the visitor hasn't been tracked yet today on this property. Handle that case before chaining further writes.
-
-> **Important:** the `ip` must be the **visitor's** IP from your incoming request, not your server's outbound IP. Your framework's `$request->getClientIp()` / equivalent does the right thing automatically (resolves through proxies / CDNs). The SDK does not inspect the transport-level IP of its own outbound call.
+> **Laravel:** skip straight to [`Snipform::event()`](#firing-events-from-laravel) - it resolves the id, picks the dispatch mode, and never throws for a visitor the tracker couldn't see.
 
 ### Event
 
-Submit a custom event for a session. Identifies the target session in one of two ways:
-
 ```php
-// Explicit session_id in the payload
-$event = $snipform->session()->event([
-    'session_id' => $resolved->sessionId,
-    'name'       => 'purchase',
-    'value'      => 99.99,            // optional
-    'meta'       => ['order_id' => 'X-1', 'currency' => 'USD'],  // optional
-]);
-
-// Or pass the request — SDK reads session_id from the X-SnipForm-Session-Id
-// header or `snip_session_id` body field (set by signals.js attachToFetch /
-// attachToForm on the customer's page)
+// Pass the request — the SDK resolves session_id through the four transports
 $event = $snipform->session()->event($request, [
     'name'  => 'purchase',
-    'value' => 99.99,
+    'value' => 9900,                                      // optional
+    'meta'  => ['order_id' => 'X-1', 'currency' => 'USD'], // optional
+]);
+
+// Or supply an explicit session_id (one you stored earlier)
+$event = $snipform->session()->event([
+    'session_id' => $order->snipform_session_id,
+    'name'       => 'order_shipped',
 ]);
 ```
 
-Returns a typed `Event` value object.
+Returns a typed `Event` value object. Throws `MissingSessionIdException` when a `Request` carries no resolvable id - call `$snipform->session()->fromRequest($request)` first if you'd rather branch than catch.
 
 ### Acquisition
 
-Patch acquisition metadata onto a session. Partial — only supplied keys are written. Tags merge with existing tags (deduped); cost / value / currency overwrite.
+Patch acquisition metadata onto a session. Partial — only supplied keys are written. Tags merge with existing tags (deduped); cost / value / currency overwrite. **Money is in integer cents.**
 
 ```php
-$snipform->session()->acquisition([
-    'session_id'    => $resolved->sessionId,
-    'cost'          => 250,          // optional, integer
-    'value'         => 9900,         // optional, integer
+$snipform->session()->acquisition($request, [
+    'value'         => 9900,         // optional, integer cents
+    'cost'          => 250,          // optional, integer cents
     'currency_code' => 'USD',        // optional, ISO 4217
     'tags'          => ['affiliate'],// optional, merged
 ]);
 
-// Or via Request, same as event()
-$snipform->session()->acquisition($request, [
-    'value' => 9900,
-    'tags'  => ['paid'],
-]);
+// Or with an explicit session_id, same as event()
+$snipform->session()->acquisition(['session_id' => $sessionId, 'value' => 9900]);
 ```
 
-Returns the resulting `acquisition_meta` array along with the session id.
+Returns the session id, the resulting `acquisition_meta`, and the value block.
 
 ### Typical end-to-end flow
 
+Capture the id at the moment you have it; store it; fire later writes against the stored id.
+
 ```php
-public function recordConversion(Request $request)
+// Checkout controller — the visitor is on the page, so the id resolves
+public function store(Request $request, \SnipForm\Client $snipform)
 {
-    $resolved = $snipform->session()->resolve($request);
-    if (! $resolved->resolved) {
-        return;  // visitor hasn't been tracked yet
+    $order = Order::create([
+        // ...
+        'snipform_session_id' => $snipform->session()->fromRequest($request),   // may be null
+    ]);
+
+    if ($order->snipform_session_id) {
+        $snipform->session()->event($request, ['name' => 'purchase', 'value' => $order->total_cents]);
+        $snipform->session()->acquisition($request, ['value' => $order->total_cents, 'currency_code' => $order->currency]);
     }
+}
 
-    $snipform->session()->event([
-        'session_id' => $resolved->sessionId,
-        'name'       => 'purchase',
-        'value'      => $order->total,
-    ]);
-
-    $snipform->session()->acquisition([
-        'session_id'    => $resolved->sessionId,
-        'value'         => (int) ($order->total * 100),
-        'currency_code' => $order->currency,
-        'tags'          => ['paid'],
-    ]);
+// Fulfilment job, days later — no request, just the stored id
+public function handle(\SnipForm\Client $snipform)
+{
+    if ($this->order->snipform_session_id) {
+        $snipform->session()->event(['session_id' => $this->order->snipform_session_id, 'name' => 'order_shipped']);
+    }
 }
 ```
+
+## Contacts
+
+Bridge anonymous sessions to known people. A `Contact` holds the PII (email, name, phone, company, custom traits); sessions reference it by id only.
+
+```php
+// Find-or-create by external_id (preferred) or email, set-once link to the current session
+$contact = $snipform->contacts()->identify([
+    'external_id' => 'usr_123',
+    'email'       => 'jane@acme.com',
+    'session_id'  => $sessionId,                       // optional — link happens only when present
+    'traits'      => [
+        'first_name' => 'Jane',
+        'company'    => 'Acme',
+        'lifecycle_stage' => 'customer',
+        'meta'       => [['key' => 'plan', 'value' => 'pro']],
+    ],
+]);
+
+// Same, with a client-side dedup gate so repeat calls don't hit the API
+$fired = $snipform->contacts()->identifyOnce([...]);          // bool — see Client::withIdentifyDedup()
+$fired = $snipform->contacts()->identifyFromRequest($request, [...]);   // merges the tracker header
+
+// Read
+$contact = $snipform->contacts()->find($id);
+foreach ($snipform->contacts()->all(['search' => 'acme']) as $c) { ... }   // auto-paginated
+foreach ($snipform->contacts()->sessionsFor($id) as $session) { ... }    // cursor-walks every page
+
+// Update
+$snipform->contacts()->update($id, ['lifecycle_stage' => 'customer']);
+
+// Delete — redaction, not a row drop: every identifying field is destroyed,
+// related identify events are scrubbed, and the contact's sessions keep only
+// an anonymous reference. This is how an erasure request is honoured.
+$snipform->contacts()->delete($id);
+```
+
+The `Contact` DTO exposes `id`, `externalId`, `email`, `firstName`, `lastName`, `fullName`, `phone`, `company`, `jobTitle`, `website`, `country`, `city`, `lifecycleStage`, `state`, `meta`, `firstSeenTs`, `identifiedTs`, `lastSeenTs`, `sessionCount`.
+
+Identify is idempotent: resolution is by `external_id` first, else `email`; a session is linked once and never re-linked. Browsers sending Global Privacy Control are never identified through the public tracker endpoint - server-side identify (this SDK) carries no browser signal and is unaffected.
 
 ## Conversions
 
@@ -684,6 +729,95 @@ Each `$client->resource()` call returns a fresh instance, so flipping `asRaw` on
 
 Optional Laravel layer that ships in `SnipForm\Laravel\*`. The SDK doesn't depend on Laravel — these classes only load when `illuminate/support` is installed. Composer's package discovery wires the provider; everything is opt-in via config.
 
+### Reading the visitor's session id
+
+The JS tracker resolves a `sessionId` for the visitor on every page — but only on the client side. The browser is the only canonical source. To use the value in your Laravel controllers (for identify, custom events, analytics joins), drop the `@snipformHydrate` directive into your root Blade layout and the SDK delivers it server-side.
+
+Works for any Laravel app that renders an HTML shell — including Inertia, whose root layout is still a Blade file.
+
+```blade
+<head>
+  @snipformHydrate
+</head>
+```
+
+That's all. From any controller:
+
+```php
+public function checkout(Request $request, \SnipForm\Client $sf)
+{
+    $sessionId = $request->snipformSessionId();          // string|null
+    // or via facade
+    $sessionId = \SnipForm\Laravel\Facades\Snipform::sessionId();
+
+    if ($sessionId) {
+        $sf->session()->event([
+            'session_id' => $sessionId,
+            'name' => 'checkout_started',
+        ]);
+    }
+}
+```
+
+The macro reads from, in priority:
+
+1. **Laravel session** — populated by the hydrate loader on a prior request. Free after the first delivery.
+2. **`X-SnipForm-Session-Id` header** — set by the JS tracker's `attachToFetch()` on AJAX calls.
+3. **`snip_session_id` form field** — set by `attachToForm()` on form posts.
+4. **`snip_session_id` query string** — manually appended.
+
+#### How the hydrate loader delivers the value
+
+The directive emits a tiny inline `<script>` block that, once the tracker resolves the `sessionId`, writes it into a transient first-party cookie. The cookie lives for **exactly one request**: a middleware reads the value, copies it into your Laravel session under `snipform_session_id`, and clears the cookie on the response.
+
+```
+Tracker boots → sets `site_initializer=<sid>; SameSite=Lax; Path=/`
+       ↓
+User's next nav → cookie travels automatically
+       ↓
+Laravel middleware → reads value → session()->put(...) → Set-Cookie deletes it
+       ↓
+From here on → $request->snipformSessionId() returns it, no cookie involved
+```
+
+The cookie is purely transport — a CSRF-shaped baton-handoff. It never persists, never gets observed by anything but your own app, and is gone from the browser after one round-trip. Same "strictly necessary" GDPR category as a CSRF cookie.
+
+The loader is **idempotent**: it bakes the currently-stashed value into the emitted script and skips the cookie write when `window.signals.sessionId` already matches. A page reload after a successful delivery is a complete no-op.
+
+#### Cookie vs POST mode
+
+Two delivery modes, swappable via config:
+
+| Mode | What it does | Use when |
+|---|---|---|
+| `'cookie'` (default) | JS writes a transient first-party cookie; middleware reads + clears it on the next request | Almost always — zero extra HTTP calls, value rides on the user's next nav |
+| `'post'` | JS POSTs `{ session_id }` to a dedicated bind endpoint (`/snipform/bind` by default) | Your infra strips cookies between browser and Laravel (rare — some corporate proxies, weird CDN configs) |
+
+Switch with:
+
+```php
+// config/snipform.php
+'hydrate' => [
+    'mode'        => 'post',                       // default 'cookie'
+    'cookie_name' => 'site_initializer',           // default — generic on purpose
+    'bind_url'    => '/snipform/bind',             // post mode only
+    'enabled'     => true,
+],
+```
+
+In **post mode** you'll want the standard CSRF meta tag in your layout so the POST request carries a token:
+
+```blade
+<meta name="csrf-token" content="{{ csrf_token() }}">
+```
+
+In **cookie mode** the meta tag isn't required — the loader doesn't make any HTTP calls.
+
+#### Honest limits
+
+- The very first server-rendered request itself doesn't have a session id — the tracker hasn't booted yet. Every request after the first does.
+- JS-disabled visitors never trigger the loader, so the session id never reaches your backend. Identify calls for those visitors still create a `Contact`, just without a session link.
+
 ### Auto-identify on login
 
 The happy path: every time a user logs into your app, attach their session to a SnipForm `Contact` automatically. No code at the callsite.
@@ -764,29 +898,72 @@ Full control over the rest by publishing the config file:
 php artisan vendor:publish --tag=snipform-config
 ```
 
-### `Snipform` facade
+### Firing events from Laravel
 
-Explicit identify calls — useful for paths the `Login` event doesn't cover (impersonation, webhook handlers, side flows):
+With the hydrate loader in your layout, the visitor's session id is already in the Laravel session - so server-side writes are one line, with no request plumbing:
 
 ```php
 use SnipForm\Laravel\Facades\Snipform;
 
+Snipform::event('purchase', 9900, ['order' => $order->id]);   // name, value, meta
+Snipform::event('newsletter_signup');
+Snipform::revenue(9900, 'USD');                                // acquisition value, integer cents
+Snipform::acquisition(['cost' => 250, 'tags' => ['paid']]);    // any acquisition fields
+```
+
+Each returns `true` when the write was dispatched and **`false` when no session id could be resolved** - a JS-disabled visitor, a bot, or the very first request before the tracker booted. That's a normal outcome, not an exception; your checkout never breaks because analytics couldn't see the visitor.
+
+When you already hold the id (you stored it on an order at checkout via `Snipform::sessionId()`), use the `*For()` variants from anywhere - queued jobs, webhooks, artisan commands:
+
+```php
+Snipform::eventFor($order->snipform_session_id, 'order_shipped');
+Snipform::acquisitionFor($order->snipform_session_id, ['tags' => ['repeat']]);
+```
+
+**When the write leaves the box** is config, not code - `snipform.events.dispatch`:
+
+| Mode | What happens | Use when |
+|---|---|---|
+| `after_response` (default) | Runs after the response is sent, in the container's terminating phase | Almost always - zero request latency, no worker needed |
+| `queue` | A real `ShouldQueue` job (`SignalWriteJob`) on your queue connection, name from `snipform.queue_name` | You run workers and want retries + to survive the request entirely |
+| `sync` | Inline; the caller waits for the API | Tests, CLI, or when you need the `Event` back immediately (use `Snipform::session()->event()` for that) |
+
+```
+SNIPFORM_EVENTS_DISPATCH=after_response   # sync | after_response | queue
+SNIPFORM_QUEUE=snipform                   # queue name for 'queue' mode (optional)
+```
+
+### `Snipform` facade
+
+Everything the Laravel backend does with SnipForm, in one place:
+
+```php
+use SnipForm\Laravel\Facades\Snipform;
+
+// Writes — session id resolved for you
+Snipform::event('purchase', 9900);
+Snipform::revenue(9900, 'USD');
+Snipform::acquisition(['tags' => ['paid']]);
+
+// Identify
+Snipform::identify($user);              // any model with the Identifiable trait (alias: user())
 Snipform::auth();                       // identify auth()->user(), no-op for guests
-Snipform::user($someOtherUser);         // identify any model with the Identifiable trait
 Snipform::payload([                     // raw passthrough — bypass the trait
     'email'  => 'jane@acme.com',
     'traits' => ['first_name' => 'Jane'],
 ]);
 
-Snipform::contacts()->find($id);        // SDK Contacts resource — find/update/delete/all
-Snipform::contacts()->update($id, [
-    'lifecycle_stage' => 'customer',
-]);
+// The visitor's session id, or null
+Snipform::sessionId();
 
-Snipform::client();                     // escape hatch — full SDK Client
+// Reads + resources
+Snipform::signals()->last7Days()->metrics();
+Snipform::contacts()->find($id);
+Snipform::session()->event($request, ['name' => 'x']);   // the raw resource when you want the Event back
+Snipform::client();                                      // escape hatch — full SDK Client
 ```
 
-All `identify` calls honor the same dedup + queue config — `Snipform::auth()` called a hundred times in the same hour costs you one API call.
+All identify calls honor the dedup + dispatch config — `Snipform::auth()` called a hundred times in the same hour costs you one API call. The dedup decision runs inline (one cache add); only the HTTP call defers.
 
 To register the `Snipform` alias globally (so you don't have to `use` it everywhere), add to `config/app.php`:
 
@@ -837,6 +1014,8 @@ To opt out of the auto-registered provider entirely, add to your app's `composer
 ```
 
 ### `SnipFormSessionMiddleware`
+
+> **Prefer [the `@snipformHydrate` directive](#reading-the-visitors-session-id) for new code.** This middleware predates the hydrate flow and only inspects per-request transports (header / form / query). It doesn't durably bind the session id to Laravel's session, so subsequent requests in the same visit don't see it unless the tracker re-attaches. Kept for back-compat.
 
 Older / lighter helper that just lifts the visitor's session id off the inbound request and stashes it on `$request->attributes`. Use it when you want the id without invoking the SDK on every request (analytics-only handlers, presence checks, conditional logging).
 
@@ -925,6 +1104,19 @@ SnipForm::client('snipform_pat_xxx', [
     'verify_ssl'  => true,                        // default; set false for local self-signed certs
 ]);
 ```
+
+In Laravel the same options live in `config/snipform.php` (`php artisan vendor:publish --tag=snipform-config`), all `.env`-driven:
+
+| Key | Env | Default | Notes |
+|---|---|---|---|
+| `token` | `SNIPFORM_TOKEN` | - | Property API token |
+| `base_url` / `path_prefix` / `timeout` / `verify_ssl` | `SNIPFORM_BASE_URL` ... | as above | |
+| `hydrate.mode` | `SNIPFORM_HYDRATE_MODE` | `cookie` | `cookie` or `post` - see [hydrate](#reading-the-visitors-session-id) |
+| `events.dispatch` | `SNIPFORM_EVENTS_DISPATCH` | `after_response` | `sync` / `after_response` / `queue` |
+| `queue_name` | `SNIPFORM_QUEUE` | default queue | For any write in `queue` mode |
+| `identify.on_login` | `SNIPFORM_IDENTIFY_ON_LOGIN` | `true` | Auto-identify on `Auth\Events\Login` |
+| `identify.queue` | `SNIPFORM_IDENTIFY_QUEUE` | `after_response` | Dispatch mode for identify (booleans still accepted) |
+| `identify.dedup_ttl` | `SNIPFORM_IDENTIFY_DEDUP_TTL` | `3600` | Seconds; `0` disables dedup |
 
 ## Tests
 

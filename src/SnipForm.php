@@ -10,11 +10,14 @@ namespace SnipForm;
  */
 class SnipForm
 {
+    /** Bump with every tagged release - rides on the User-Agent of every call. */
+    public const VERSION = '0.0.13';
+
     /**
      * Create a property-scoped SnipForm client.
      *
      * @param  string  $token  Property API token (Personal Access Token).
-     * @param  array{base_url?: string, timeout?: int}  $options
+     * @param  array{base_url?: string, timeout?: int, path_prefix?: string, verify_ssl?: bool}  $options
      */
     public static function client(string $token, array $options = []): Client
     {

@@ -26,7 +26,7 @@ class IncompatibleFieldOperator extends SnipFormException
         $valid = self::validOpsFor($type);
 
         return new self(sprintf(
-            "Operator `%s` is not valid for field `%s` (type: %s). Valid ops: %s.",
+            'Operator `%s` is not valid for field `%s` (type: %s). Valid ops: %s.',
             $op,
             $field->value,
             $type->value,

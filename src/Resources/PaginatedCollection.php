@@ -30,7 +30,7 @@ class PaginatedCollection implements Countable, IteratorAggregate, JsonSerializa
 
     /**
      * @param  Closure(array): object  $factory  fn (array $row) => Item value object.
-     *                                            Skipped when $asRaw is true; rows yield as plain arrays.
+     *                                           Skipped when $asRaw is true; rows yield as plain arrays.
      */
     public function __construct(
         private readonly HttpClient $http,

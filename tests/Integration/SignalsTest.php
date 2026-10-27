@@ -2,7 +2,9 @@
 
 namespace SnipForm\Tests\Integration;
 
+use SnipForm\Data\GraphResult;
 use SnipForm\Data\MetricsResult;
+use SnipForm\Exceptions\InvalidPeriodException;
 
 /**
  * Live signals queries against a local SnipForm deployment. Skipped when
@@ -31,7 +33,7 @@ class SignalsTest extends IntegrationTestCase
 
     public function test_invalid_period_throws_before_http(): void
     {
-        $this->expectException(\SnipForm\Exceptions\InvalidPeriodException::class);
+        $this->expectException(InvalidPeriodException::class);
         $this->client->signals()->period('last_42')->metrics();
     }
 
@@ -41,5 +43,30 @@ class SignalsTest extends IntegrationTestCase
 
         $this->assertNotEmpty($property->id);
         $this->assertNotEmpty($property->name);
+    }
+
+    public function test_graph_for_last_7_days(): void
+    {
+        $graph = $this->client->signals()->last7Days()->graph('sessions');
+
+        $this->assertInstanceOf(GraphResult::class, $graph);
+        $this->assertSame('sessions', $graph->metric);
+        $this->assertNotEmpty($graph->series);
+    }
+
+    public function test_graph_with_compare_returns_a_previous_series(): void
+    {
+        $graph = $this->client->signals()->last7Days()->graph('views', compare: true);
+
+        $this->assertInstanceOf(GraphResult::class, $graph);
+        $this->assertNotEmpty($graph->previousSeries);
+    }
+
+    public function test_live_window(): void
+    {
+        $graph = $this->client->signals()->live();
+
+        $this->assertInstanceOf(GraphResult::class, $graph);
+        $this->assertSame('sessions', $graph->metric);
     }
 }
