@@ -56,6 +56,7 @@ Snipform::identify($user);                                     // contact, from 
 - [Short links](#short-links)
 - [Session actions](#session-actions)
 - [Contacts](#contacts)
+- [Forms](#forms)
 - [Conversions](#conversions)
 - [Attribution](#attribution)
 - [`asRaw()` — opt-out of typed objects](#asraw--opt-out-of-typed-objects)
@@ -520,6 +521,33 @@ $snipform->contacts()->delete($id);
 The `Contact` DTO exposes `id`, `externalId`, `email`, `firstName`, `lastName`, `fullName`, `phone`, `company`, `jobTitle`, `website`, `country`, `city`, `lifecycleStage`, `state`, `meta`, `firstSeenTs`, `identifiedTs`, `lastSeenTs`, `sessionCount`.
 
 Identify is idempotent: resolution is by `external_id` first, else `email`; a session is linked once and never re-linked. Browsers sending Global Privacy Control are never identified through the public tracker endpoint - server-side identify (this SDK) carries no browser signal and is unaffected.
+
+## Forms
+
+Read-only, needs the `forms:read` scope. The property's forms in one call, newest first:
+
+```php
+$forms = $client->forms()->all();        // Form[]
+$forms[0]->name;                         // "Contact us"
+$forms[0]->state;                        // active | paused | archived
+$forms[0]->submits;                      // accepted submissions
+```
+
+The `Form` DTO exposes `id`, `name`, `state`, `submits`, `lastSubmitAt`, `createdAt`. `submits` never includes spam or submissions from blocked countries; it does include flagged ones.
+
+Which visits submitted a form is on the session rows. Filter with `SessionField::SNIP_FORM_ID` and read `form_tags` in raw mode:
+
+```php
+foreach ($client->signals()->last28Days()
+    ->where(SessionField::SNIP_FORM_ID, $formId)
+    ->asRaw()->sessions(100) as $row) {
+    foreach ($row['form_tags'] ?? [] as $tag) {
+        // ['snip_form_id' => ..., 'snip_form_submit_id' => ..., 'is_flagged' => false]
+    }
+}
+```
+
+Spam is never tracked onto a visit. A flagged submission (suspicious, kept for review) is, with `is_flagged: true`, so skip those when a submission has to be a real lead, for example before paying for it.
 
 ## Conversions
 

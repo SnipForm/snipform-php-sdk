@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.0 - unreleased
+
+### Added
+
+- **`$client->forms()->all()`** - the property's forms (`GET /v2/property/forms`, `forms:read` scope), as typed `Form` DTOs (`id`, `name`, `state`, `submits`, `lastSubmitAt`, `createdAt`) or raw rows with `asRaw()`. Needs the SnipForm API release that adds the endpoint.
+- Raw session rows now carry `is_flagged` on each `form_tags` entry (server side, no SDK change needed to read it). Spam is never tracked onto a visit; a flagged submission is, so check the flag before treating a submission as a real lead. README has a Forms section.
+
 ## 0.0.13 — 2026-08-21
 
 The "fire events from the backend" release.

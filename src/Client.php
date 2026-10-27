@@ -8,6 +8,7 @@ use SnipForm\Resources\Attribution;
 use SnipForm\Resources\Clicks;
 use SnipForm\Resources\Contacts;
 use SnipForm\Resources\Conversions;
+use SnipForm\Resources\Forms;
 use SnipForm\Resources\LinkGroups;
 use SnipForm\Resources\Links;
 use SnipForm\Resources\Properties;
@@ -124,6 +125,11 @@ class Client
     public function conversions(): Conversions
     {
         return new Conversions($this->http);
+    }
+
+    public function forms(): Forms
+    {
+        return new Forms($this->http);
     }
 
     public function attribution(): Attribution

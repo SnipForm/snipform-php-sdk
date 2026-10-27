@@ -11,7 +11,7 @@ namespace SnipForm;
 class SnipForm
 {
     /** Bump with every tagged release - rides on the User-Agent of every call. */
-    public const VERSION = '0.0.13';
+    public const VERSION = '0.1.0';
 
     /**
      * Create a property-scoped SnipForm client.
